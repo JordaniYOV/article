@@ -1,0 +1,96 @@
+# Registry only: no dataset is downloaded or admitted by this configuration.
+# Statuses inherit the working research plan; inspect actual archives before enabling.
+schema_version = "0.1"
+status = "draft"
+reference_date = "2026-09-25"
+protocol = "docs/protocols/data_and_evaluation.md"
+
+[datasets.m2020]
+display_name = "M2020 Traversability"
+enabled = false
+track = "mars_rover"
+role = "observed_traversability_candidate"
+source_url = "https://darren-chiu.github.io/learning-to-drive-on-mars/"
+access_status = "unverified_release_and_archive"
+label_status = "image_pose_proprioception_alignment_requires_verification"
+provenance_status = "pending"
+candidate_tasks = ["traversed_terrain_difficulty"]
+gate_access = "pending"
+gate_license = "pending"
+gate_labels = "pending"
+gate_provenance = "pending"
+gate_split_and_overlap = "pending"
+gate_task_rules = "pending"
+limitations = ["Do not infer untraversed alternatives from observed wheel-track outcomes", "Grayscale stereo is not RGB and does not establish supplied depth ground truth"]
+
+[datasets.ai4mars]
+display_name = "AI4MARS"
+enabled = false
+track = "mars_rover"
+role = "terrain_semantics"
+source_url = "https://data.nasa.gov/dataset/ai4mars-a-dataset-for-terrain-aware-autonomous-driving-on-mars"
+access_status = "public_source_actual_files_not_audited"
+label_status = "semantic_masks_schema_and_ignore_values_require_verification"
+provenance_status = "pending"
+candidate_tasks = ["terrain_class", "rock_presence"]
+gate_access = "pending"
+gate_license = "pending"
+gate_labels = "pending"
+gate_provenance = "pending"
+gate_split_and_overlap = "pending"
+gate_task_rules = "pending"
+limitations = ["Unlabeled pixels are not negative evidence", "Audit training overlap for each checkpoint, especially any Space-LLaVA comparison", "Native terrain classes are not geometric flatness or physical hazard labels"]
+
+[datasets.marsdata_v2]
+display_name = "MarsData-V2"
+enabled = false
+track = "mars_rover"
+role = "rock_semantics"
+source_url = "https://github.com/CVIR-Lab/MarsData"
+access_status = "samples_documented_full_access_unverified"
+label_status = "rock_segmentation_not_physical_hazard_ground_truth"
+provenance_status = "pending"
+candidate_tasks = ["rock_presence"]
+gate_access = "pending"
+gate_license = "pending"
+gate_labels = "pending"
+gate_provenance = "pending"
+gate_split_and_overlap = "pending"
+gate_task_rules = "pending"
+limitations = ["Check full access and license terms before downloading", "Keep augmented variants and their originals in the same split", "Semantic connected components are not guaranteed rock instances"]
+
+[datasets.marsscapes]
+display_name = "MarsScapes"
+enabled = false
+track = "mars_rover"
+role = "spatial_reasoning_and_traversability_proxy"
+source_url = "https://github.com/InRobots/MarsScapes"
+access_status = "download_instructions_available_archives_not_audited"
+label_status = "semantic_and_instance_schema_requires_verification"
+provenance_status = "pending"
+candidate_tasks = ["terrain_class", "rock_presence", "largest_rock_location", "apparent_traversability_direction"]
+gate_access = "pending"
+gate_license = "pending"
+gate_labels = "pending"
+gate_provenance = "pending"
+gate_split_and_overlap = "pending"
+gate_task_rules = "pending"
+limitations = ["Keep panorama crops in the same source group", "Cost-based traversability is a proxy, not an observed driving outcome", "Image sectors are not steering directions without orientation and calibration", "Candidate tasks require relevant classes and adequate annotation coverage"]
+
+[datasets.lucid]
+display_name = "LUCID"
+enabled = false
+track = "lunar_orbital"
+role = "separate_domain_specialization_evaluation"
+source_url = "https://huggingface.co/datasets/pcvlab/lucid"
+access_status = "public_source_actual_files_not_audited"
+label_status = "native_caption_qa_separate_scoring_protocol_required"
+provenance_status = "pending"
+candidate_tasks = ["native_lunar_qa"]
+gate_access = "pending"
+gate_license = "pending"
+gate_labels = "pending"
+gate_provenance = "pending"
+gate_split_and_overlap = "pending"
+gate_task_rules = "pending"
+limitations = ["Use only verified held-out evaluation data, not training configurations", "Audit parent tiles, geographic overlap, and all model training stages", "Do not combine native open-ended QA scores with rover closed-form metrics"]

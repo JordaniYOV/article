@@ -1,0 +1,101 @@
+# Candidate registry, not runnable adapter configuration.
+# Provisional statuses from research_plan.md (2026-09-25); not a new resource audit.
+schema_version = "0.1"
+status_date = "2026-09-25"
+admission_protocol = "docs/protocols/inference.md"
+execution_policy = "sequential_single_gpu"
+target_gpu = "NVIDIA RTX 5070 Ti 16 GB"
+
+[[models]]
+id = "llava-v1.5-13b"
+name = "LLaVA-v1.5-13B"
+group = "general"
+enabled = false
+checkpoint = "liuhaotian/llava-v1.5-13b"
+source_url = "https://huggingface.co/liuhaotian/llava-v1.5-13b"
+revision = "UNPINNED"
+code_revision = "UNPINNED"
+processor_revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "pending_pilot"
+precision = "UNDECIDED"
+quantization = "UNDECIDED"
+fit_16gb = "unverified"
+comparison_role = "candidate_matched_base_for_llava_le"
+notes = "Public checkpoint per working plan; exact LE base and preprocessing still require verification."
+
+[[models]]
+id = "llava-le"
+name = "LLaVA-LE"
+group = "lunar_specialized"
+enabled = false
+checkpoint = "UNVERIFIED"
+source_url = "https://github.com/OSUPCVLab/LLaVA-LE"
+revision = "UNPINNED"
+code_revision = "UNPINNED"
+processor_revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "pending_checkpoint_and_pilot"
+precision = "UNDECIDED"
+quantization = "UNDECIDED"
+fit_16gb = "unverified"
+candidate_base = "llava-v1.5-13b"
+matched_base_verified = false
+notes = "Code and LUCID reported available; released inference weights must be located and checked."
+
+[[models]]
+id = "qwen2.5-vl-7b"
+name = "Qwen2.5-VL-7B-Instruct"
+group = "general"
+enabled = false
+checkpoint = "Qwen/Qwen2.5-VL-7B-Instruct"
+source_url = "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct"
+revision = "UNPINNED"
+code_revision = "UNPINNED"
+processor_revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "pending_pilot"
+precision = "UNDECIDED"
+quantization = "UNDECIDED"
+fit_16gb = "unverified"
+comparison_role = "general_system_comparator_not_selenovlm_base"
+notes = "Public checkpoint per working plan; not the direct base architecture of SelenoVLM."
+
+[[models]]
+id = "selenovlm"
+name = "SelenoVLM"
+group = "lunar_specialized"
+enabled = false
+checkpoint = "TechnicToms/SelenoVLM"
+source_url = "https://huggingface.co/TechnicToms/SelenoVLM"
+code_url = "https://github.com/TechnicToms/SelenoVLM"
+revision = "UNPINNED"
+code_revision = "UNPINNED"
+processor_revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "pending_rover_input_compatibility_and_pilot"
+precision = "UNDECIDED"
+quantization = "UNDECIDED"
+fit_16gb = "unverified"
+text_backbone = "Qwen2.5-7B-Instruct"
+rover_image_only_verified = false
+comparison_role = "exploratory_system_comparator"
+notes = "Custom lunar multimodal encoder and text backbone; do not fabricate missing native modalities or assume RGB-only support."
+
+[[models]]
+id = "internvl3.5-8b"
+name = "InternVL3.5-8B"
+group = "general_reserve"
+enabled = false
+checkpoint = "OpenGVLab/InternVL3_5-8B"
+source_url = "https://huggingface.co/OpenGVLab/InternVL3_5-8B"
+revision = "UNPINNED"
+code_revision = "UNPINNED"
+processor_revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "reserve_pending_pilot"
+precision = "UNDECIDED"
+quantization = "UNDECIDED"
+fit_16gb = "unverified"
+comparison_role = "reserve_general_comparator"
+notes = "Public checkpoint per working plan; inclusion requires a frozen protocol decision and pilot."

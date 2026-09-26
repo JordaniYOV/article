@@ -1,0 +1,40 @@
+schema_version = "0.1"
+status = "draft"
+seed = 42
+gpu_concurrency = 1
+# This is a design registry, not an executable sweep configuration.
+# Corruption strengths and depth pipeline must be frozen after development pilot.
+
+[E1]
+name = "Clean planetary perception"
+enabled = false
+track_separation = ["mars_rover", "lunar_orbital"]
+
+[E2]
+name = "Visual degradation robustness"
+enabled = false
+depends_on = ["E1"]
+corruptions = ["blur", "noise", "low_light", "low_contrast", "occlusion"]
+severity_levels = 3
+parameters_status = "not_frozen"
+
+[E3]
+name = "False-positive / unsupported-claim analysis"
+enabled = false
+reuse_outputs = ["E1", "E2"]
+claim_level_annotations_available = false
+
+[E4]
+name = "Visual representations"
+enabled = false
+representations = ["appearance", "depth_visualization", "appearance_plus_depth"]
+optional_representations = ["normal_map"]
+subset_status = "not_selected"
+full_corruption_cross_product = false
+
+[E5]
+name = "Planetary specialization to rover-view transfer"
+enabled = false
+reuse_outputs = ["E1", "E2"]
+interpretation = "compound_domain_transfer"
+matched_checkpoint_gate = true
