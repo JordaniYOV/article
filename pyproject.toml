@@ -4,10 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "planetary-vlm-benchmark"
-version = "0.1.0"
-description = "Scaffold for reproducible planetary rover VLM evaluation"
+version = "0.2.0"
+description = "Model-independent planetary VLM inference and evaluation"
 requires-python = ">=3.11"
 dependencies = []
+
+[project.optional-dependencies]
+images = ["Pillow>=10", "numpy>=1.26"]
+hf = ["torch>=2.5", "transformers>=4.49,<5", "accelerate>=1"]
+quantization = ["bitsandbytes>=0.45"]
+
+[project.scripts]
+planetary-vlm = "planetary_vlm.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

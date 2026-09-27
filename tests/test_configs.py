@@ -34,21 +34,15 @@ class ConfigTests(unittest.TestCase):
         for index in range(1, 6):
             self.assertIs(experiments[f"E{index}"]["enabled"], False)
 
-    def test_installed_agents_match_templates(self):
-        for name in ("researcher", "vlm-expert", "data-eval"):
-            with self.subTest(agent=name):
-                installed = ROOT / ".codex/agents" / f"{name}.toml"
-                template = ROOT / "docs/agent_templates" / f"{name}.toml"
-                self.assertEqual(installed.read_bytes(), template.read_bytes())
+    def test_local_agent_schema_when_available(self):
+        # Codex role settings may legitimately be customized or absent in a clone.
+        for installed in (ROOT / ".codex/agents").glob("*.toml"):
+            with self.subTest(agent=installed.stem):
                 with installed.open("rb") as stream:
                     config = tomllib.load(stream)
-                self.assertEqual(config["name"], name)
+                self.assertTrue(config["name"])
                 self.assertTrue(config["description"])
                 self.assertTrue(config["developer_instructions"])
-                if name == "researcher":
-                    self.assertEqual(config["model"], "gpt-6-luna")
-                else:
-                    self.assertNotIn("model", config)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,16 @@
+# Pure plumbing fixture: these declared responses do not inspect the PPM image.
+[run]
+run_id = "toy-demo"
+requests = "requests.jsonl"
+output_dir = "../../outputs/runs"
+seed = 42
+
+[model]
+id = "mock-fixture"
+backend = "mock"
+
+[model.options.responses]
+toy01 = "YES"
+toy02 = "NO"
+toy03 = "There may be a rock"
+toy04 = "NO"

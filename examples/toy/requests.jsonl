@@ -1,0 +1,4 @@
+{"request_id":"toy01","image_paths":["image.ppm"],"prompt":"Is an annotated rock present? Answer exactly YES or NO.","allowed_answers":["YES","NO"]}
+{"request_id":"toy02","image_paths":["image.ppm"],"prompt":"Is an annotated rock present? Answer exactly YES or NO.","allowed_answers":["YES","NO"]}
+{"request_id":"toy03","image_paths":["image.ppm"],"prompt":"Is an annotated rock present? Answer exactly YES or NO.","allowed_answers":["YES","NO"]}
+{"request_id":"toy04","image_paths":["image.ppm"],"prompt":"Is an annotated rock present? Answer exactly YES or NO.","allowed_answers":["YES","NO"]}

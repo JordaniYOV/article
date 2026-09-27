@@ -1,0 +1,36 @@
+# Demonstration values only; scientific severity parameters are not frozen.
+seed = 42
+
+[[variants]]
+id = "clean"
+transform = "clean"
+
+[[variants]]
+id = "blur-demo"
+transform = "blur"
+[variants.parameters]
+radius = 1.0
+
+[[variants]]
+id = "noise-demo"
+transform = "noise"
+[variants.parameters]
+sigma = 10.0
+
+[[variants]]
+id = "low-light-demo"
+transform = "low_light"
+[variants.parameters]
+factor = 0.5
+
+[[variants]]
+id = "contrast-demo"
+transform = "contrast"
+[variants.parameters]
+factor = 0.5
+
+[[variants]]
+id = "occlusion-demo"
+transform = "occlusion"
+[variants.parameters]
+rectangle = [0.25, 0.25, 0.75, 0.75]

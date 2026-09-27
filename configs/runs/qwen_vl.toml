@@ -1,0 +1,18 @@
+# Template: edit local paths after separately obtaining weights and dependencies.
+[run]
+requests = "../../data/manifests/rover_requests.jsonl"
+output_dir = "../../outputs/runs"
+run_id = "qwen-vl-pilot"
+seed = 42
+
+[model]
+id = "qwen2.5-vl-7b"
+backend = "hf_vlm"
+
+[model.options]
+model_path = "../../weights/Qwen2.5-VL-7B-Instruct"
+local_files_only = true
+dtype = "bfloat16"
+device = "cuda:0"
+# Pin and record the checkpoint revision in the acquired local snapshot manifest.
+# BF16 is an explicit pilot setting, not a promise that 16 GB is sufficient.

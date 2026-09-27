@@ -1,0 +1,22 @@
+# Native lunar tile protocol only. This is NOT a rover RGB configuration.
+[run]
+requests = "../../data/manifests/seleno_native_requests.jsonl"
+output_dir = "../../outputs/runs"
+run_id = "seleno-native-pilot"
+seed = 42
+
+[model]
+id = "selenovlm-native"
+backend = "seleno_native"
+
+[model.options]
+runtime_repo = "../../external/SelenoVLM"
+model_path = "../../weights/Qwen2.5-7B-Instruct"
+checkpoint_path = "../../external/SelenoVLM/tb_logs/geovlm/qwen2.5-7b-xattn-lora-v19-fullMareAge/checkpoints/step-step=10000.ckpt"
+mae_checkpoint_path = "../../external/SelenoVLM/tb_logs/multimodal/wac-elevation-pos-geomap-clementine-from4m-v15b/checkpoints/best-epoch=10-step=21428.ckpt"
+tokenizer_path = "../../external/SelenoVLM/tb_logs/tokenizer"
+data_dir = "../../external/SelenoVLM/datasets/global100m"
+code_revision = "360fe4da392fb310300b267c3fb6f597d928d064"
+local_files_only = true
+device = "cuda:0"
+prompt_protocol = "native_prompt_plus_instruction"

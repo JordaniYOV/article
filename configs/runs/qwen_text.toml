@@ -1,0 +1,16 @@
+# Text-only baseline/control; not a VLM and not a SelenoVLM vision ablation.
+[run]
+requests = "../../data/manifests/text_requests.jsonl"
+output_dir = "../../outputs/runs"
+run_id = "qwen-text-pilot"
+seed = 42
+
+[model]
+id = "qwen2.5-7b-instruct-text"
+backend = "hf_text"
+
+[model.options]
+model_path = "../../weights/Qwen2.5-7B-Instruct"
+local_files_only = true
+dtype = "bfloat16"
+device = "cuda:0"
