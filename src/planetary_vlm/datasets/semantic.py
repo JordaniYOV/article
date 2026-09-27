@@ -20,7 +20,8 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
     config_bytes = specification_path.read_bytes()
     config = tomllib.loads(config_bytes.decode("utf-8-sig"))
     permitted = {"label_to_class", "ignore_labels", "roi", "min_valid_fraction",
-                 "dominant_min_fraction", "rock_min_pixels", "rock_classes", "tasks"}
+                 "dominant_min_fraction", "rock_min_pixels", "rock_classes", "tasks",
+                 "question_policy"}
     if set(config) - permitted:
         raise ValueError("Unknown semantic conversion parameters")
     mapping = config.get("label_to_class", {})
@@ -58,6 +59,9 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
         if type(config.get("rock_min_pixels")) is not int or config["rock_min_pixels"] < 1:
             raise ValueError("Specify positive rock_min_pixels")
     terrain_answers = tuple(sorted(set(mapping.values()))) + ("MIXED",)
+    question_policy = config.get("question_policy", "all")
+    if question_policy not in {"all", "one_per_image"}:
+        raise ValueError("question_policy must be all or one_per_image")
     if "MIXED" in mapping.values():
         raise ValueError("MIXED is reserved for the defined aggregation rule")
     records = read_jsonl(samples_path)
@@ -72,7 +76,7 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
         seen.add(record["sample_id"])
     if not records:
         raise ValueError("Sample index is empty")
-    version = "semantic-v1-" + hashlib.sha256(config_bytes).hexdigest()
+    version = "semantic-v2-" + hashlib.sha256(config_bytes + Path(__file__).read_bytes()).hexdigest()
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=False)
     requests, targets, provenance, exclusions = [], [], [], []
@@ -110,7 +114,18 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("xb") as stream:
             image.crop(box).save(stream, format="PNG")
+        eligible = list(tasks)
+        # Decide eligibility before assignment, without treating ignored pixels as negatives.
+        if valid != len(pixels):
+            eligible = [task for task in eligible if task != "terrain" and
+                        sum(counts[label] for label in rock_classes) >= config["rock_min_pixels"]]
+        selected = eligible
+        if question_policy == "one_per_image" and eligible:
+            index = int(hashlib.sha256(record["sample_id"].encode()).hexdigest(), 16) % len(eligible)
+            selected = [eligible[index]]
         for task in tasks:
+            if task in eligible and task not in selected:
+                continue
             if task == "terrain":
                 if valid != len(pixels):
                     exclusions.append({"sample_id": record["sample_id"], "task_id": task,
@@ -120,7 +135,9 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
                 winners = [name for name, value in counts.items() if value == largest]
                 answer = winners[0] if len(winners) == 1 and largest / valid >= config["dominant_min_fraction"] else "MIXED"
                 allowed = terrain_answers
-                prompt = "Which terrain class dominates this cropped region? Answer exactly one of: " + ", ".join(allowed) + "."
+                prompt = (f"Which semantic class covers at least {config['dominant_min_fraction']:.0%} "
+                          "of this image region? If none does or there is a tie, answer MIXED. "
+                          "Answer exactly one of: " + ", ".join(allowed) + ".")
             else:
                 rock_pixels = sum(counts[label] for label in rock_classes)
                 if rock_pixels < config["rock_min_pixels"] and valid != len(pixels):
@@ -136,8 +153,13 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
             targets.append({"request_id": key, "answer": answer, "source_sample_id": record["sample_id"],
                             "group_id": record["group_id"], "derivation_version": version,
                             "task_id": task, "condition_id": "clean"})
+        prepared_mask = destination / "masks" / output.name
+        prepared_mask.parent.mkdir(parents=True, exist_ok=True)
+        with prepared_mask.open("xb") as stream:
+            cropped_mask.save(stream, format="PNG")
         provenance.append({**record, "image_path": str(source_image.resolve()),
                            "mask_path": str(source_mask.resolve()), "prepared_image": str(output),
+                           "prepared_mask": str(prepared_mask),
                            "roi_pixels": list(box), "valid_fraction": valid / len(pixels),
                            "image_sha256": image_hash, "mask_sha256": mask_hash,
                            "derivation_version": version})

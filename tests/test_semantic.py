@@ -55,3 +55,19 @@ class SemanticTests(unittest.TestCase):
             self.build_inputs(directory, [0, 0, 0, 1], rock_classes='["ROCK","ROCK"]')
             with self.assertRaises(ValueError):
                 convert_semantic(directory / "samples.jsonl", directory / "spec.toml", directory / "output")
+
+    def test_one_question_and_separate_aligned_mask(self):
+        with tempfile.TemporaryDirectory() as task_directory:
+            directory = Path(task_directory)
+            self.build_inputs(directory, [0, 0, 0, 1])
+            specification = directory / "spec.toml"
+            specification.write_text('question_policy="one_per_image"\n' + specification.read_text(), encoding="utf-8")
+            output = convert_semantic(directory / "samples.jsonl", specification, directory / "output")
+            requests = read_jsonl(output / "requests.jsonl")
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(len(read_jsonl(output / "targets.jsonl")), 1)
+            from PIL import Image
+            provenance = read_jsonl(output / "provenance.jsonl")[0]
+            with Image.open(provenance["prepared_mask"]) as mask:
+                self.assertEqual(list(mask.getdata()), [0, 0, 0, 1])
+            self.assertNotIn("prepared_mask", requests[0])

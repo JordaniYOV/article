@@ -5,6 +5,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 import sys
+import subprocess
 
 from planetary_vlm.datasets.manifest import load_requests, check_assets
 from planetary_vlm.io import read_jsonl, write_json
@@ -47,9 +48,98 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--output", required=True)
     compare.add_argument("--seed", type=int, default=42)
     compare.add_argument("--repetitions", type=int, default=1000)
+    dataset = commands.add_parser("dataset", help="Download, prepare and audit datasets independently of inference")
+    datasets = dataset.add_subparsers(dest="dataset_command", required=True)
+    download = datasets.add_parser("download", help="Explicit source acquisition; never triggered by prepare")
+    download.add_argument("--planet", choices=("mars", "moon", "all"), default="all")
+    download.add_argument("--root", default="data")
+    download.add_argument("--mars-archive", action="store_true")
+    download.add_argument("--lunar-pilot-ids", nargs="*", default=["001", "084", "168"])
+    download.add_argument("--stereo-stage", choices=("catalog", "labels", "aliases", "images", "pilot"))
+    download.add_argument("--images", action="store_true")
+    build = datasets.add_parser("prepare", help="Offline versioned RGB/semantic dataset assembly")
+    build.add_argument("--planet", choices=("mars", "moon"), required=True)
+    build.add_argument("--root", default="data")
+    build.add_argument("--samples")
+    build.add_argument("--specification")
+    build.add_argument('--depth-index', help='Require a QA stereo depth map for every admitted photograph')
+    build.add_argument("--output", required=True)
+    batch = datasets.add_parser('depth-batch', help='Plan, acquire or verify a resumable depth-complete Mars subset')
+    batch.add_argument('--stage', choices=('plan','acquire','run'), required=True)
+    batch.add_argument('--root', default='data')
+    batch.add_argument('--plan')
+    batch.add_argument('--cache')
+    batch.add_argument('--output')
+    batch.add_argument('--resume', action='store_true')
+    batch.add_argument('--min-coverage', type=float, default=.5)
+    batch.add_argument('--max-mae', type=float, default=8.)
+    batch.add_argument('--limit', type=int)
+    batch.add_argument('--build-output', help='After complete verification, assemble the final depth-complete semantic subset')
+    for operation in ("extract", "inspect", "search-pairs", "audit-stereo", "check-pair", "pilot", "alignment", "compare-depth"):
+        action = datasets.add_parser(operation)
+        action.add_argument("--root", default="data")
+        if operation == "inspect":
+            action.add_argument("--planet", choices=("mars", "moon"), required=True)
+        elif operation == "search-pairs":
+            action.add_argument("--stage", choices=("requests", "audit"), default="audit")
+        elif operation == "pilot":
+            action.add_argument("--stage", choices=("select", "verify"), required=True)
+            action.add_argument("--output")
+        elif operation == "audit-stereo":
+            action.add_argument("--source")
+            action.add_argument("--output", required=True)
+        elif operation in {"check-pair", "alignment"}:
+            action.add_argument("--audit", required=True)
+            action.add_argument("--output", required=True)
+            if operation == "check-pair":
+                action.add_argument("--sol", required=True)
+                action.add_argument("--left-product")
+                action.add_argument("--right-product")
+                action.add_argument("--refine-pointing", action="store_true")
+        elif operation == "compare-depth":
+            action.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "validate":
+        if args.command == "dataset":
+            from planetary_vlm.datasets import MarsData, LuneData
+            operation = args.dataset_command
+            if operation == "download":
+                from planetary_vlm.download_dataset import download_dataset
+                result = download_dataset(planet=args.planet, root=args.root,
+                    mars_archive=args.mars_archive, lunar_pilot_ids=args.lunar_pilot_ids,
+                    stereo_stage=args.stereo_stage, images=args.images)
+            elif operation == "prepare":
+                from planetary_vlm.prepare_dataset import prepare_dataset
+                result = prepare_dataset(planet=args.planet, root=args.root,
+                    samples=args.samples, specification=args.specification, output=args.output, depth_index=args.depth_index)
+            elif operation == "inspect":
+                result = (MarsData if args.planet == "mars" else LuneData)(args.root).inspect()
+            else:
+                mars = MarsData(args.root)
+                if operation == 'depth-batch':
+                    result = mars.depth_batch(stage=args.stage, output=args.output, plan=args.plan, cache=args.cache,
+                        resume=args.resume, min_coverage=args.min_coverage, max_mae=args.max_mae, limit=args.limit,
+                        build_output=args.build_output)
+                elif operation == "extract":
+                    result = mars.extract()
+                elif operation == "search-pairs":
+                    result = mars.search_pairs(args.stage)
+                elif operation == "audit-stereo":
+                    result = mars.audit_stereo_sources(source=args.source, output=args.output)
+                elif operation == "check-pair":
+                    result = mars.check_pair(audit=args.audit, output=args.output, sol=args.sol,
+                        left_product=args.left_product, right_product=args.right_product,
+                        refine_pointing=args.refine_pointing)
+                elif operation == "pilot":
+                    if args.stage == "select" and args.output is not None:
+                        raise ValueError("--output is only applicable to pilot verify")
+                    result = mars.select_pilot_pairs() if args.stage == "select" else mars.verify_pilot_pairs(output=args.output)
+                elif operation == "alignment":
+                    result = mars.check_alignment(audit=args.audit, output=args.output)
+                elif operation == "compare-depth":
+                    result = mars.compare_depth_images(output=args.output)
+            print(json.dumps(result, default=str, ensure_ascii=False))
+        elif args.command == "validate":
             requests = load_requests(args.requests)
             if args.check_assets:
                 check_assets(requests)
@@ -101,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             report["mock"] = True if True in markers else (False if markers == (False, False) else None)
             write_json(args.output, report)
             print(args.output)
-    except (ValueError, OSError, ImportError, KeyError, TypeError) as error:
+    except (ValueError, OSError, ImportError, KeyError, TypeError, subprocess.SubprocessError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
     return 0

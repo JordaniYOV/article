@@ -13,9 +13,15 @@ dependencies = []
 images = ["Pillow>=10", "numpy>=1.26"]
 hf = ["torch>=2.5", "transformers>=4.49,<5", "accelerate>=1"]
 quantization = ["bitsandbytes>=0.45"]
+stereo = ["Pillow>=10", "numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"]
 
 [project.scripts]
 planetary-vlm = "planetary_vlm.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["planetary_vlm*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"planetary_vlm.datasets._mars" = ["*.ps1", "*.toml"]
