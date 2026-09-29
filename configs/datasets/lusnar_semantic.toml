@@ -1,0 +1,17 @@
+# Source label colours are converted to these scalar IDs before assembly.
+# LuSNAR is a synthetic Unreal Engine track, not real lunar mission imagery.
+ignore_labels = []
+roi = [0.0, 0.0, 1.0, 1.0]
+min_valid_fraction = 1.0
+dominant_min_fraction = 0.6
+rock_min_pixels = 256
+rock_classes = ["ROCK"]
+tasks = ["terrain", "rock_presence"]
+question_policy = "one_per_image"
+
+[label_to_class]
+1 = "REGOLITH"
+2 = "CRATER"
+3 = "ROCK"
+4 = "MOUNTAIN"
+5 = "SKY"

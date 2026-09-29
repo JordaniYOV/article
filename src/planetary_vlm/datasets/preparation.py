@@ -13,10 +13,15 @@ from planetary_vlm.datasets.semantic import convert_semantic
 from planetary_vlm.io import read_jsonl, write_json, write_jsonl
 
 
-def build(source, specification, destination, *, domain="mars", depth_index=None):
+def build(source, specification, destination, *, domain="mars", depth_index=None,
+          track_metadata=None):
     if domain not in {"mars", "moon"}:
         raise ValueError("Dataset domain must be mars or moon")
     source, specification, destination = map(Path, (source, specification, destination))
+    track_metadata = dict(track_metadata or {})
+    if set(track_metadata) - {"track", "source", "license", "synthetic", "scene_split",
+                               "scientific_scope", "depth_provenance"}:
+        raise ValueError("Unknown dataset track metadata")
     if destination.exists():
         raise FileExistsError(f"Version already exists; choose a new destination: {destination}")
     rows = read_jsonl(source)
@@ -108,8 +113,14 @@ def build(source, specification, destination, *, domain="mars", depth_index=None
                      provenance="moon/test/provenance.jsonl",
                      source=sorted({row["source_url"] for row in rows}),
                      license=sorted({row["license"] for row in rows}))
-        manifest["moon"].update(stats, status="clean_semantic_only_depth_not_prepared")
+        manifest["moon"].update(stats, requested_photographs=len(rows),
+            admitted_complete_triplets=len(targets), status="clean_semantic_only_depth_not_prepared")
         manifest["status"] = "moon_clean_semantic_only_mars_not_included"
+        if track_metadata:
+            manifest["moon"].update(track_metadata)
+            if track_metadata.get("synthetic"):
+                manifest["moon"]["status"] = "synthetic_lunar_semantic_track"
+                manifest["status"] = "synthetic_lunar_track_mars_not_included"
     if depth_index is not None:
         admitted = {row['source_sample_id'] for row in targets}
         prepared_depths = []
@@ -123,19 +134,42 @@ def build(source, specification, destination, *, domain="mars", depth_index=None
             folder = track/'depth'
             folder.mkdir(exist_ok=True)
             token = Path(provenance['prepared_image']).stem
-            dp,vp = folder/(token+'.range_m.npy'), folder/(token+'.validity.npy')
+            units = entry.get("depth_units", "m" if domain == "mars" else "unspecified")
+            depth_tag = "range_m" if units == "m" else "source_values"
+            dp,vp = folder/(token+f'.{depth_tag}.npy'), folder/(token+'.validity.npy')
             np.save(dp, np.where(valid,depth,np.nan),allow_pickle=False)
             np.save(vp, valid,allow_pickle=False)
-            prepared_depths.append({**entry,'depth_path':str(dp),'validity_path':str(vp),
+            portable_track = domain == "moon" and bool(track_metadata.get("synthetic"))
+            depth_path = dp.relative_to(track).as_posix() if portable_track else str(dp)
+            validity_path = vp.relative_to(track).as_posix() if portable_track else str(vp)
+            image_path = provenance['prepared_image']
+            mask_path = provenance['prepared_mask']
+            if portable_track:
+                image_path = Path(image_path).relative_to(track).as_posix()
+                mask_path = Path(mask_path).relative_to(track).as_posix()
+            prepared_entry = {**entry,'depth_path':depth_path,'validity_path':validity_path,
                 'depth_sha256':fingerprint(dp),'validity_sha256':fingerprint(vp),
-                'image_path':provenance['prepared_image'],'mask_path':provenance['prepared_mask'],
-                'full_frame_depth_path':entry['depth_path'],'valid_fraction':float(valid.mean()),
-                'roi_pixels':provenance['roi_pixels']})
+                'image_path':image_path,'mask_path':mask_path,
+                'valid_fraction':float(valid.mean()),
+                'roi_pixels':provenance['roi_pixels'],
+                'depth_units':entry.get('depth_units', 'm' if domain == 'mars' else 'unspecified')}
+            if portable_track:
+                prepared_entry['source_depth_member'] = entry.get('source_depth_member')
+            else:
+                prepared_entry['full_frame_depth_path'] = entry['depth_path']
+            prepared_depths.append(prepared_entry)
         write_jsonl(track/'depth_index.jsonl',prepared_depths)
         write_jsonl(destination/'depth_exclusions.jsonl',depth_exclusions)
+        depth_origins = sorted({entry.get("depth_origin", "unspecified") for entry in depths.values()})
+        depth_provenance = track_metadata.get("depth_provenance") or (
+            depth_origins[0] if len(depth_origins) == 1 else "mixed_or_unspecified")
         manifest[domain].update(depth_maps=len(prepared_depths),depth_index=f'{domain}/test/depth_index.jsonl',
-            depth_provenance='stereo_reconstructed_not_independent_depth_GT',every_admitted_photo_has_depth=True)
-        manifest.update(status=f'{domain}_clean_stereo_depth_subset_pending_scientific_review',
+            depth_provenance=depth_provenance,every_admitted_photo_has_depth=True)
+        if domain == "moon" and track_metadata.get("synthetic"):
+            depth_status = "synthetic_lunar_clean_depth_subset_pending_scientific_review"
+        else:
+            depth_status = f'{domain}_clean_stereo_depth_subset_pending_scientific_review'
+        manifest.update(status=depth_status,
             depth_index_sha256=fingerprint(Path(depth_index)),ROI_depth_min_valid_fraction=.5)
     write_json(destination / "manifest.json", manifest)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))

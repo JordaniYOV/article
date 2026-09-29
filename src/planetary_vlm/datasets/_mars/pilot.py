@@ -8,7 +8,7 @@ from .partners import ROOT, load
 
 
 def select(data_root=None):
-    data_root = Path(data_root) if data_root is not None else ROOT / "data"
+    data_root = Path(data_root) if data_root is not None else ROOT / "data_rover"
     RAW = data_root / "raw/mastcam_partner_search_v1"
     OUT = data_root / "source_audit_v1/mastcam_partner_search"
     models = {r["product_id"]: r for r in load(OUT / "source_camera_models.json")}
@@ -40,7 +40,7 @@ def select(data_root=None):
 
 
 def verify(data_root=None, output=None):
-    data_root = Path(data_root) if data_root is not None else ROOT / "data"
+    data_root = Path(data_root) if data_root is not None else ROOT / "data_rover"
     RAW = data_root / "raw/mastcam_partner_search_v1"
     SOURCE = data_root / "raw/mastcam_pair_verification_v1"
     DEST = Path(output) if output is not None else data_root / "source_audit_v1/mastcam_pair_verification_v2"

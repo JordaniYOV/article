@@ -9,7 +9,7 @@ class BaseData(ABC):
     """Domain-independent interface; imports do not load image/GPU backends."""
     domain: str
 
-    def __init__(self, root: str | Path = "data"):
+    def __init__(self, root: str | Path = "data_rover"):
         self.root = Path(root).resolve()
 
     @property

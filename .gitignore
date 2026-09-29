@@ -8,8 +8,10 @@ __pycache__/
 .env
 .env.*
 !.env.example
-/data/*
-!/data/README.md
+/data_rover/*
+!/data_rover/README.md
+/data_orbital/*
+!/data_orbital/README.md
 /outputs/*
 !/outputs/README.md
 /weights/
@@ -19,4 +21,3 @@ __pycache__/
 /docs
 AGENTS.md
 research_plan.md
-README.md

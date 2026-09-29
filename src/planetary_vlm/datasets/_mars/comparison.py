@@ -27,7 +27,7 @@ def sha(path):
 
 
 def main(data_root=None, output=None):
-    data_root = Path(data_root) if data_root is not None else ROOT / "data"
+    data_root = Path(data_root) if data_root is not None else ROOT / "data_rover"
     OUT = Path(output) if output is not None else ROOT / "outputs/mastcam_depth_comparison_v1"
     OUT.mkdir(parents=True, exist_ok=False)
     results = []

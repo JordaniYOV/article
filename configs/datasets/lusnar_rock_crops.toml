@@ -1,0 +1,16 @@
+# Paired crop evaluation: each 500x500 ROI has an aligned source depth map.
+ignore_labels = []
+roi = [0.0, 0.0, 1.0, 1.0]
+min_valid_fraction = 1.0
+dominant_min_fraction = 0.6
+rock_min_pixels = 256
+rock_classes = ["ROCK"]
+tasks = ["rock_presence"]
+question_policy = "one_per_image"
+
+[label_to_class]
+1 = "REGOLITH"
+2 = "CRATER"
+3 = "ROCK"
+4 = "MOUNTAIN"
+5 = "SKY"

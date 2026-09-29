@@ -9,10 +9,10 @@ from planetary_vlm.datasets.base import PROJECT_ROOT as PROJECT
 
 
 def check(audit_path=None, samples_dir=None, output=None):
-    audit_path = Path(audit_path) if audit_path is not None else PROJECT / 'data/source_audit_v1/mastcam_stereo_pilot/audit.json'
+    audit_path = Path(audit_path) if audit_path is not None else PROJECT / 'data_rover/source_audit_v1/mastcam_stereo_pilot/audit.json'
     audit_dir = audit_path.parent
     audit = json.loads(audit_path.read_text())
-    samples_dir = Path(samples_dir) if samples_dir is not None else PROJECT / 'data/interim/mars_bench_msl_v1/test'
+    samples_dir = Path(samples_dir) if samples_dir is not None else PROJECT / 'data_rover/interim/mars_bench_msl_v1/test'
     samples = [json.loads(line) for line in (samples_dir / 'samples.jsonl').read_text().splitlines()]
     results = []
     for label in audit['labels']:

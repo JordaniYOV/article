@@ -149,7 +149,9 @@ def convert_semantic(samples_path: str | Path, specification_path: str | Path,
                 prompt = (f"Does rock terrain cover at least {config['rock_min_pixels']} image pixels "
                           "in this cropped region? Answer exactly YES or NO.")
             key = hashlib.sha256(f"{record['sample_id']}:{task}:{version}:{image_hash}:{mask_hash}".encode()).hexdigest()
-            requests.append(asdict(ModelRequest(key, (str(output),), prompt, allowed)))
+            # Request paths are relative to requests.jsonl so a prepared track
+            # remains usable after the dataset folder is moved to another host.
+            requests.append(asdict(ModelRequest(key, (output.relative_to(destination).as_posix(),), prompt, allowed)))
             targets.append({"request_id": key, "answer": answer, "source_sample_id": record["sample_id"],
                             "group_id": record["group_id"], "derivation_version": version,
                             "task_id": task, "condition_id": "clean"})

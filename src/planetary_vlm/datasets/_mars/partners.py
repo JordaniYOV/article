@@ -36,12 +36,12 @@ def identity_hypothesis(benchmark_id, archive_id):
 
 
 def targets(data_root=None):
-    data_root = Path(data_root) if data_root is not None else ROOT / "data"
+    data_root = Path(data_root) if data_root is not None else ROOT / "data_rover"
     return [json.loads(x) for x in (data_root / "interim/mars_bench_msl_v1/test/provenance.jsonl").read_text().splitlines()]
 
 
 def requests(data_root=None):
-    data_root = Path(data_root) if data_root is not None else ROOT / "data"
+    data_root = Path(data_root) if data_root is not None else ROOT / "data_rover"
     RAW = data_root / "raw/mastcam_partner_search_v1"
     bench = {normalized(r["mission_image_id"]) for r in targets(data_root)}
     by_sol = defaultdict(list)
@@ -107,7 +107,7 @@ def candidate(left, right, ray_cache):
 
 
 def audit(data_root=None):
-    data_root = Path(data_root) if data_root is not None else ROOT / "data"
+    data_root = Path(data_root) if data_root is not None else ROOT / "data_rover"
     RAW = data_root / "raw/mastcam_partner_search_v1"
     OUT = data_root / "source_audit_v1/mastcam_partner_search"
     OUT.mkdir(parents=True, exist_ok=True)

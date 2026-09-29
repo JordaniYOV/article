@@ -46,11 +46,13 @@ class LuneData(BaseData):
         from .inspection import inspect
         return inspect(self.root, domains=("moon",))
 
-    def prepare(self, *, output, specification=None, samples=None):
+    def prepare(self, *, output, specification=None, samples=None, depth_index=None,
+                track_metadata=None):
         if samples is None or specification is None:
             raise ValueError("Moon preparation requires a verified semantic samples index and native label specification; depth-validity masks are not semantic GT")
         from .preparation import build
-        return build(samples, specification, self.new_version(output), domain=self.domain)
+        return build(samples, specification, self.new_version(output), domain=self.domain,
+                     depth_index=depth_index, track_metadata=track_metadata)
 
     def _collect_sources(self, pilot_ids, report):
         root, evidence = self.root, self.evidence

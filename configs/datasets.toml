@@ -1,7 +1,7 @@
 # Registry only: no dataset is downloaded or admitted by this configuration.
 # Statuses inherit the working research plan; inspect actual archives before enabling.
 schema_version = "0.1"
-status = "draft"
+status = "legacy_rover_design"
 reference_date = "2026-09-25"
 protocol = "docs/protocols/data_and_evaluation.md"
 

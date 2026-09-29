@@ -1,40 +1,46 @@
 schema_version = "0.1"
-status = "draft"
+status = "orbital_design_not_executable"
 seed = 42
 gpu_concurrency = 1
-# This is a design registry, not an executable sweep configuration.
-# Corruption strengths and depth pipeline must be frozen after development pilot.
+# Current design: docs/protocols/orbital_study.md and configs/orbital_study.toml.
+# Disabled until model pilots, task rules and split audits pass.
 
 [E1]
-name = "Clean planetary perception"
+name = "Clean orbital feature recognition and localization"
 enabled = false
-track_separation = ["mars_rover", "lunar_orbital"]
+primary_pair_candidate = "moon_nac_crater_location"
+secondary_pair_candidate = "moon_imp_region_presence"
+unpaired_mars_tasks = ["mars_crater_region_presence", "mars_cone_region_presence"]
+uncertainty_group = "source_scene_or_study_box"
+task_rules_status = "not_frozen"
 
 [E2]
-name = "Visual degradation robustness"
+name = "Orbital image degradation"
 enabled = false
 depends_on = ["E1"]
-corruptions = ["blur", "noise", "low_light", "low_contrast", "occlusion"]
+corruptions = ["blur", "noise", "illumination_or_contrast", "occlusion"]
 severity_levels = 3
 parameters_status = "not_frozen"
+target_visibility_status = "annotation_rule_pending"
 
 [E3]
-name = "False-positive / unsupported-claim analysis"
+name = "False claims and missed features"
 enabled = false
 reuse_outputs = ["E1", "E2"]
 claim_level_annotations_available = false
+negative_label_completeness_required = true
 
 [E4]
-name = "Visual representations"
+name = "Route choice and surface geometry"
 enabled = false
-representations = ["appearance", "depth_visualization", "appearance_plus_depth"]
-optional_representations = ["normal_map"]
-subset_status = "not_selected"
-full_corruption_cross_product = false
+required_truth = ["coregistered_measured_dem_or_dtm", "pixel_scale", "nodata", "start_goal", "rover_profile"]
+common_output = "route_choice_and_generated_grid_path_with_task_matched_cost_map"
+reference = "frozen_grid_cost_model_and_shortest_path"
+status = "blocked_missing_aligned_terrain_truth_and_common_model_output"
 
 [E5]
-name = "Planetary specialization to rover-view transfer"
+name = "Moon_Mars_and_sensor_domain_analysis"
 enabled = false
 reuse_outputs = ["E1", "E2"]
-interpretation = "compound_domain_transfer"
-matched_checkpoint_gate = true
+interpretation = "compound_planet_sensor_resolution_label_shift"
+ibm_mars_gate = "input_and_task_head_pilot_required"

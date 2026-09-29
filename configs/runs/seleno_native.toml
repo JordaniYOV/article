@@ -1,6 +1,6 @@
 # Native lunar tile protocol only. This is NOT a rover RGB configuration.
 [run]
-requests = "../../data/manifests/seleno_native_requests.jsonl"
+requests = "../../data_rover/manifests/seleno_native_requests.jsonl"
 output_dir = "../../outputs/runs"
 run_id = "seleno-native-pilot"
 seed = 42

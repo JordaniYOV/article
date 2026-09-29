@@ -1,6 +1,6 @@
 # Template: edit local paths after separately obtaining weights and dependencies.
 [run]
-requests = "../../data/manifests/rover_requests.jsonl"
+requests = "../../data_rover/manifests/rover_requests.jsonl"
 output_dir = "../../outputs/runs"
 run_id = "qwen-vl-pilot"
 seed = 42

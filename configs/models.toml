@@ -1,5 +1,6 @@
 # Candidate registry, not runnable adapter configuration.
-# Provisional statuses from research_plan.md (2026-09-25); not a new resource audit.
+# Registry includes historical rover candidates and the selected orbital pair.
+# Orbital checkpoint availability checked against publisher cards on 2026-09-29.
 schema_version = "0.1"
 status_date = "2026-09-25"
 admission_protocol = "docs/protocols/inference.md"
@@ -115,3 +116,52 @@ adapter_status = "implemented_not_gpu_tested"
 admission_status = "pending_text_only_pilot"
 comparison_role = "seleno_language_backbone_not_a_visual_baseline"
 notes = "Rejects image/native-modality requests; use only a separately declared text-only protocol."
+
+[[models]]
+id = "nasa-ibm-lunar-fm"
+name = "NASA-IBM Lunar Foundation Model"
+group = "lunar_orbital_vision_foundation"
+enabled = false
+checkpoint = "nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model"
+source_url = "https://huggingface.co/nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model"
+revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "weights_available_task_head_and_mars_compatibility_unverified"
+fit_16gb = "unverified"
+comparison_role = "selected_orbital_specialized_system"
+moon_imp_head = "nasa-ibm-ai4science/IMP-Segmentation-NASA-IBM-Lunar-Foundation-Model"
+moon_nac_crater_head = "nasa-ibm-ai4science/Crater-Detection-NASA-IBM-Lunar-Foundation-Model"
+moon_nac_crater_weight = "NAC_ni_lfm_ps9_s44.ckpt"
+notes = "Lunar remote-sensing encoder, not open-ended QA. Published IMP segmentation and crater detection heads are separate checkpoints. Model card has no Mars validation."
+
+[[models]]
+id = "spacellava-remyxai"
+name = "SpaceLLaVA (Remyx AI)"
+group = "spatial_reasoning_vlm"
+enabled = false
+checkpoint = "remyxai/SpaceLLaVA"
+source_url = "https://huggingface.co/remyxai/SpaceLLaVA"
+revision = "UNPINNED"
+code_revision = "UNPINNED"
+processor_revision = "UNPINNED"
+adapter_status = "not_implemented"
+admission_status = "published_weights_pilot_pending"
+precision = "UNDECIDED"
+quantization = "UNDECIDED"
+fit_16gb = "unverified"
+comparison_role = "selected_orbital_vlm_system"
+notes = "LLaVA-v1.5-13B fine-tuned on synthetic spatial VQA, not the planetary Space-LLaVA by Foutter et al. FP16 weights exceed 16 GB before inference overhead; test a quantized or offloaded path before claiming local feasibility."
+
+[[models]]
+id = "space-llava-foutter"
+name = "Space-LLaVA (Foutter et al.)"
+group = "extraterrestrial_vlm"
+enabled = false
+checkpoint = "UNVERIFIED"
+source_url = "https://arxiv.org/abs/2408.05924"
+revision = "UNVERIFIED"
+adapter_status = "blocked_missing_exact_checkpoint"
+admission_status = "paper_described_weights_not_located"
+fit_16gb = "unverified"
+comparison_role = "historical_unavailable_candidate_not_selected"
+notes = "Distinct from the user-selected remyxai/SpaceLLaVA; exact published-paper checkpoint was not located."

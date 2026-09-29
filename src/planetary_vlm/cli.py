@@ -52,21 +52,31 @@ def main(argv: list[str] | None = None) -> int:
     datasets = dataset.add_subparsers(dest="dataset_command", required=True)
     download = datasets.add_parser("download", help="Explicit source acquisition; never triggered by prepare")
     download.add_argument("--planet", choices=("mars", "moon", "all"), default="all")
-    download.add_argument("--root", default="data")
+    download.add_argument("--root", default="data_rover")
     download.add_argument("--mars-archive", action="store_true")
     download.add_argument("--lunar-pilot-ids", nargs="*", default=["001", "084", "168"])
     download.add_argument("--stereo-stage", choices=("catalog", "labels", "aliases", "images", "pilot"))
     download.add_argument("--images", action="store_true")
     build = datasets.add_parser("prepare", help="Offline versioned RGB/semantic dataset assembly")
     build.add_argument("--planet", choices=("mars", "moon"), required=True)
-    build.add_argument("--root", default="data")
+    build.add_argument("--root", default="data_rover")
     build.add_argument("--samples")
     build.add_argument("--specification")
     build.add_argument('--depth-index', help='Require a QA stereo depth map for every admitted photograph')
+    build.add_argument("--track", choices=("lusnar",), help="Explicit synthetic lunar source track")
     build.add_argument("--output", required=True)
+    lusnar_crops = datasets.add_parser("crop-lusnar",
+        help="Select balanced 500px LuSNAR RGB/semantic/depth crops")
+    lusnar_crops.add_argument("--selection-index", required=True)
+    lusnar_crops.add_argument("--output", required=True)
+    lusnar_crops.add_argument("--crop-size", type=int, default=500)
+    lusnar_crops.add_argument("--per-class", type=int, default=76)
+    lusnar_crops.add_argument("--min-rock-pixels", type=int, default=256)
+    lusnar_crops.add_argument("--min-depth-fraction", type=float, default=0.8)
+    lusnar_crops.add_argument("--min-surface-fraction", type=float, default=0.8)
     batch = datasets.add_parser('depth-batch', help='Plan, acquire or verify a resumable depth-complete Mars subset')
     batch.add_argument('--stage', choices=('plan','acquire','run'), required=True)
-    batch.add_argument('--root', default='data')
+    batch.add_argument('--root', default='data_rover')
     batch.add_argument('--plan')
     batch.add_argument('--cache')
     batch.add_argument('--output')
@@ -77,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     batch.add_argument('--build-output', help='After complete verification, assemble the final depth-complete semantic subset')
     for operation in ("extract", "inspect", "search-pairs", "audit-stereo", "check-pair", "pilot", "alignment", "compare-depth"):
         action = datasets.add_parser(operation)
-        action.add_argument("--root", default="data")
+        action.add_argument("--root", default="data_rover")
         if operation == "inspect":
             action.add_argument("--planet", choices=("mars", "moon"), required=True)
         elif operation == "search-pairs":
@@ -110,8 +120,19 @@ def main(argv: list[str] | None = None) -> int:
                     stereo_stage=args.stereo_stage, images=args.images)
             elif operation == "prepare":
                 from planetary_vlm.prepare_dataset import prepare_dataset
-                result = prepare_dataset(planet=args.planet, root=args.root,
-                    samples=args.samples, specification=args.specification, output=args.output, depth_index=args.depth_index)
+                build_options = dict(planet=args.planet, root=args.root,
+                    samples=args.samples, specification=args.specification, output=args.output,
+                    depth_index=args.depth_index)
+                if args.track is not None:
+                    build_options["track"] = args.track
+                result = prepare_dataset(**build_options)
+            elif operation == "crop-lusnar":
+                from planetary_vlm.datasets.lusnar import prepare_lusnar_balanced_crops
+                result = prepare_lusnar_balanced_crops(args.selection_index, args.output,
+                    crop_size=args.crop_size, target_per_class=args.per_class,
+                    min_rock_pixels=args.min_rock_pixels,
+                    min_valid_fraction=args.min_depth_fraction,
+                    min_surface_fraction=args.min_surface_fraction)
             elif operation == "inspect":
                 result = (MarsData if args.planet == "mars" else LuneData)(args.root).inspect()
             else:

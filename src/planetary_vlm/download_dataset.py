@@ -4,7 +4,7 @@ import json
 from planetary_vlm.datasets import MarsData, LuneData
 
 
-def download_dataset(*, planet="all", root="data", mars_archive=False,
+def download_dataset(*, planet="all", root="data_rover", mars_archive=False,
                      lunar_pilot_ids=("001", "084", "168"), stereo_stage=None,
                      images=False):
     if planet not in {"mars", "moon", "all"}:
@@ -30,7 +30,7 @@ def download_dataset(*, planet="all", root="data", mars_archive=False,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--planet", choices=("mars", "moon", "all"), default="all")
-    parser.add_argument("--root", default="data")
+    parser.add_argument("--root", default="data_rover")
     parser.add_argument("--mars-archive", action="store_true")
     parser.add_argument("--lunar-pilot-ids", nargs="*", default=["001", "084", "168"])
     parser.add_argument("--stereo-stage", choices=("catalog", "labels", "aliases", "images", "pilot"))

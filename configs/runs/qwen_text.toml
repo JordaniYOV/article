@@ -1,6 +1,6 @@
 # Text-only baseline/control; not a VLM and not a SelenoVLM vision ablation.
 [run]
-requests = "../../data/manifests/text_requests.jsonl"
+requests = "../../data_rover/manifests/text_requests.jsonl"
 output_dir = "../../outputs/runs"
 run_id = "qwen-text-pilot"
 seed = 42
