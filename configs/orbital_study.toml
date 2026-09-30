@@ -1,10 +1,22 @@
 schema_version = "orbital-study-v1"
 status = "data_collected_orbital_experiments_designed_admission_pending"
-date = "2026-09-29"
+date = "2026-09-30"
 data_root = "data_orbital"
 legacy_rover_data_root = "data_rover"
 no_training = true
 model_visible_inputs_exclude = ["mask", "annotations", "answers", "outcome_telemetry"]
+
+[datasets.curated_orbital_v3]
+root = "data_orbital/orbital_300_v3"
+selection_script = "scripts/build_orbital_300.py"
+verification_script = "scripts/verify_orbital_300.py"
+segmentation_images_per_planet = 50
+height_images_per_planet = 50
+train_images_per_planet = 50
+moon_segmentation_heldout_available = 50
+moon_segmentation_final_test_available = 17
+moon_segmentation_train_samples_in_50_image_collection = 0
+status = "assembled_and_verified_source_caches_pruned"
 
 [models.specialized]
 id = "nasa-ibm-lunar-fm"
@@ -23,38 +35,62 @@ training_domain = "synthetic_spatial_vqa_not_planetary_orbital"
 fit_16gb = "unverified_requires_quantization_or_offload_pilot"
 
 [datasets.mars_crater_binary_seg]
-source_index = "data_orbital/source_index/mars_crater_binary_seg.jsonl"
+selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
 task = "binary_crater_segmentation"
-test_count = 900
+selected_count = 14
 label_type = "pixel_mask"
-status = "assets_verified_group_geography_needs_audit"
+status = "selected_source_cache_pruned_group_geography_needs_audit"
+
+[datasets.mars_crater_multi_seg]
+source_url = "https://huggingface.co/datasets/Mirali33/mb-crater_multi_seg"
+source_revision = "9a26ac9001532bc9f4fe37abfa3fce13e4ea1b74"
+selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+task = "crater_type_segmentation"
+selected_count = 12
+label_type = "pixel_mask"
+classes = ["Background", "Other", "Layered", "Buried", "Secondary"]
 
 [datasets.mars_conequest_seg]
-source_index = "data_orbital/source_index/mars_conequest_seg.jsonl"
+selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
 task = "binary_cone_segmentation"
-test_count = 643
+selected_count = 20
 label_type = "pixel_mask"
-status = "exploratory_val_test_share_source_regions"
+status = "selected_exploratory_val_test_share_source_regions"
 
 [datasets.moon_imp_seg]
-source_index = "data_orbital/source_index/moon_imp_seg.jsonl"
+selection_manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
 task = "irregular_mare_patch_segmentation"
-test_count = 10
+selected_count = 21
 label_type = "pixel_mask"
-status = "assets_verified_small_test"
+status = "selected_small_test"
 
 [datasets.moon_nac_crater_det]
-source_index = "data_orbital/source_index/moon_nac_crater_det.jsonl"
 task = "crater_detection"
-test_count = 63
+selected_count = 0
 label_type = "coco_bounding_boxes"
-status = "assets_verified_head_dataset_version_and_training_overlap_audit_required"
+status = "not_in_active_collection_source_cache_pruned"
 
-[datasets.mars_boulder_seg_candidate]
+[datasets.mars_boulder_seg]
 source_url = "https://huggingface.co/datasets/Mirali33/mb-boulder_seg"
 task = "binary_boulder_segmentation"
 published_test_count = 4
-status = "not_acquired_small_test_ibm_head_unavailable"
+selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+selected_test_count = 4
+status = "selected_small_precise_polygon_test_subset"
+
+[datasets.moon_debris_nontrain]
+source_url = "https://huggingface.co/datasets/F1nnSBK/lunar-debris-and-voids"
+task = "pit_stone_crater_instance_segmentation"
+selection_manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+selected_nontrain_count = 9
+status = "exploratory_mobile_sam_plus_manual_fallback_labels"
+
+[datasets.moon_wac_crater_polygons]
+source_url = "https://huggingface.co/datasets/nasa-ibm-ai4science/Sombench-WAC-Crater-Detection"
+selection_manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+selected_nontrain_count = 20
+task = "catalog_crater_polygon_segmentation"
+label_type = "coco_polygons_rasterized"
 
 [questions]
 protocol = "docs/protocols/orbital_study.md"
@@ -75,4 +111,4 @@ moon_imp_pairing = "exploratory_only_ten_positive_test_tiles"
 moon_nac_pairing = "pending_label_completeness_output_rule_and_408_vs_766_dataset_version_training_overlap_audit"
 mars_pairing = "pending_ibm_input_compatibility_and_task_head"
 route_truth = "missing_coregistered_dem_or_dtm_and_rover_cost_model"
-rock_truth = "mars_boulder_source_found_not_acquired_or_admitted"
+rock_truth = "mars_boulder_test_masks_acquired_n4_small_sample"

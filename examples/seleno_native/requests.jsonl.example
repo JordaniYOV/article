@@ -1,1 +1,0 @@
-{"request_id":"native-demo01","image_paths":[],"modality_paths":[["native_tile","C:/LOCAL/SelenoVLM/demo_tiles/tile_REPLACE"]],"prompt":"Describe the geological evidence in this lunar tile. If evidence is insufficient, say so.","allowed_answers":[],"max_new_tokens":220,"do_sample":false}

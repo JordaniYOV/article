@@ -1,4 +1,0 @@
-{"request_id":"toy01","answer":"YES","source_sample_id":"fixture01","group_id":"fixture_group1","derivation_version":"synthetic-fixture-v1","task_id":"rock_presence","condition_id":"clean"}
-{"request_id":"toy02","answer":"NO","source_sample_id":"fixture02","group_id":"fixture_group1","derivation_version":"synthetic-fixture-v1","task_id":"rock_presence","condition_id":"clean"}
-{"request_id":"toy03","answer":"YES","source_sample_id":"fixture03","group_id":"fixture_group2","derivation_version":"synthetic-fixture-v1","task_id":"rock_presence","condition_id":"clean"}
-{"request_id":"toy04","answer":"YES","source_sample_id":"fixture04","group_id":"fixture_group2","derivation_version":"synthetic-fixture-v1","task_id":"rock_presence","condition_id":"clean"}
