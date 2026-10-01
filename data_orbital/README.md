@@ -29,8 +29,20 @@ This diversity spans distinct instruments and annotation tasks; class names alon
 
 - Mars elevation: 50 [MMLSv2](https://huggingface.co/datasets/MarsLS/MMLSv2) DEM arrays, `height_map.npy`, source-scaled `[0,1]`; physical units are not provided in this release. Image size is 128×128.
 - Moon elevation: 50 [SomBench WAC](https://huggingface.co/datasets/nasa-ibm-ai4science/Sombench-WAC-Crater-Detection) DTM arrays in meters, bilinearly aligned from the publisher's 60 m DTM to the 512×512 WAC image grid (100 m/pixel). Each has `height_valid_mask.npy`.
-- The 50 train images per planet come from the respective MMLSv2 and WAC train partitions and carry source masks plus elevation arrays. Their mask labels differ from the detailed segmentation evaluation tasks; training an evaluator on them is a separate, unperformed step and needs an explicit target definition.
+- The 50 train images per planet come from the respective MMLSv2 and WAC train partitions and carry source masks plus elevation arrays. The lunar WAC crater masks now have a task-matched encoder-probe target defined below; no model head has been trained. The Mars train masks still differ from the detailed Mars segmentation evaluation tasks.
 - Multi-band MMLSv2 and WAC rasters were rendered to three-channel PNG using visible bands 0–2 and a per-tile 2nd–98th percentile stretch. The manifest preserves the rendering method and SHA-256 of the source raster. These PNGs are inference images. Masks and height arrays are targets or controlled E4 inputs only; do not leak them into ordinary image-only inference.
+
+## Derived WAC encoder-probe targets
+
+`python -m linear_head_approach.prepare` builds a separate lunar WAC crater probe
+from the curated set. In addition to the 20 WAC segmentation examples, the
+50 WAC height-track images have publisher COCO crater polygons in the pinned
+SomBench val/test indices. Their binary masks are rasterized into
+`encoder_probe_wac_v1/derived_masks/` without using elevation as an input.
+The probe has 50 train, 39 val and 31 test images; its input and target
+manifests are separated in `linear_head_approach/outputs/encoder_probe_wac_v1/`. The original
+`orbital_300_v3/` collection is unchanged. See
+[`linear_head_approach/protocol.md`](../linear_head_approach/protocol.md).
 
 ## Layout and verification
 

@@ -9,14 +9,18 @@
 `data_rover/` исключён из текущего исследования и защищён: запрещено читать,
 использовать, копировать, перемещать, переименовывать, менять или удалять его
 содержимое и сам каталог. Работа с данными ведётся только в `data_orbital/`.
-Для сравнения выбраны
+Основной планируемый опыт теперь сравнивает **замороженные визуальные энкодеры**
 [`remyxai/SpaceLLaVA`](https://huggingface.co/remyxai/SpaceLLaVA) и
-[`NASA–IBM Lunar Foundation Model`](https://huggingface.co/nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model).
-Это разные типы моделей; общая задача и совместимые выходы ещё требуют проверки.
+[`NASA–IBM Lunar Foundation Model`](https://huggingface.co/nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model)
+с одинаковой обучаемой пространственной головой. Первый пилот использует лунные
+WAC-маски кратеров; его дизайн и ограничения описаны в
+[`linear_head_approach/protocol.md`](linear_head_approach/protocol.md). Сравнение
+полных систем и вопросы E1–E5 остаются отдельным анализом в
+[`docs/protocols/orbital_study.md`](docs/protocols/orbital_study.md).
+Команды для отдельного компьютера с RTX 5070 Ti находятся в
+[`linear_head_approach/gpu_runbook.md`](linear_head_approach/gpu_runbook.md).
 Веса не загружены, GPU-запуск не проверен. Разделы ниже описывают также прежний
 rover-каркас.
-Текущие вопросы, ответы и перенесённые эксперименты E1–E5 описаны в
-[`docs/protocols/orbital_study.md`](docs/protocols/orbital_study.md).
 
 ## Что работает
 

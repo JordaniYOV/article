@@ -3,7 +3,12 @@ status = "data_collected_orbital_experiments_designed_admission_pending"
 date = "2026-09-30"
 data_root = "data_orbital"
 legacy_rover_data_root = "data_rover"
+# This flag applies to the secondary complete-system study in this file.
 no_training = true
+primary_proposed_design = "frozen_visual_encoder_probe"
+primary_proposed_config = "linear_head_approach/config.toml"
+primary_proposed_protocol = "linear_head_approach/protocol.md"
+complete_system_comparison_role = "secondary"
 model_visible_inputs_exclude = ["mask", "annotations", "answers", "outcome_telemetry"]
 
 [datasets.curated_orbital_v3]

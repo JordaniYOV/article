@@ -1,0 +1,54 @@
+schema_version = "encoder-probe-v1"
+status = "native_inputs_verified_feature_extraction_blocked"
+task = "lunar_wac_catalog_crater_polygon_segmentation"
+source_dataset = "nasa-ibm-ai4science/Sombench-WAC-Crater-Detection"
+source_revision = "20f800becb64a0c7ad314652a683f97f0281fe67"
+selection = "data_orbital/orbital_300_v3"
+input_manifest = "linear_head_approach/outputs/encoder_probe_wac_v1/encoder_inputs.jsonl"
+target_manifest = "linear_head_approach/outputs/encoder_probe_wac_v1/targets.jsonl"
+train_count = 50
+validation_count = 39
+test_count = 31
+split_key = "source_split"
+group_key = "scene_group_id"
+mask_source = "publisher_catalog_crater_polygons"
+encoder_weights_frozen = true
+head_family = "shared_linear_spatial_probe"
+head_output_grid = [24, 24]
+head_regularization = 1.0
+head_train_split = "train"
+hyperparameter_split = "val"
+report_only_split = "test"
+scientific_result = false
+
+[encoders.ibm_lfm]
+checkpoint = "nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model"
+checkpoint_revision = "b657bdfe6fc4c0445d918f77a2d7b919805f3bce"
+feature = "spatial_encoder_tokens_before_task_head"
+input = "native_5band_wac_vis"
+admission = "selected_native_rasters_verified_weights_and_runtime_missing"
+upstream_source_revision = "d54c67aad513cb9daca444afa425cfb278e4fbf8"
+feature_block = 11
+image_size = 512
+patch_size = 8
+native_feature_grid = [64, 64]
+normalization_means = [0.018106, 0.025262, 0.027113, 0.028616, 0.030757]
+normalization_stds = [0.010051, 0.013646, 0.014491, 0.015267, 0.016555]
+
+[encoders.spacellava]
+checkpoint = "remyxai/SpaceLLaVA"
+checkpoint_revision = "5a69f71bda9dea3e4d8113c1047c07fd3da483f8"
+vision_architecture_config = "openai/clip-vit-large-patch14-336"
+vision_architecture_revision = "ce19dc912ca5cd21c8a653c79e251e808ccabcd1"
+vision_tower_shard = "model-00006-of-00006.safetensors"
+feature_layer = -2
+native_feature_grid = [24, 24]
+feature = "clip_vision_tower_spatial_tokens_before_multimodal_projector"
+input = "rgb_from_same_wac_raster"
+admission = "tower_tensor_location_identified_weights_and_runtime_missing"
+
+[reporting]
+primary_metric = "per_image_crater_iou"
+secondary_metrics = ["per_image_crater_dice", "all_foreground_baseline", "per_group_uncertainty"]
+test_size_warning = "Thirty-one selected test images require scene-group uncertainty and provenance audit before an article-level ranking."
+modality_warning = "Native IBM WAC receives five visible bands; CLIP receives RGB. This changes available input information."
