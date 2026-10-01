@@ -30,6 +30,8 @@ rover-каркас.
 - Evaluator: accuracy, macro-F1, confusion matrix, FPR/FNR, invalid/failure/coverage,
   срезы task×condition; парный cluster-bootstrap accuracy.
 - Image processor: clean, blur, noise, low light, contrast, occlusion.
+- NumPy/OpenCV-функции shear, radiation, lens flare, жёстких теней и их
+  комбинации: [`src/planetary_vlm/distortion/README.md`](src/planetary_vlm/distortion/README.md).
 - Фиксированный rendering готовых depth NPY и композиция выровненных изображений.
 - Конвертер native semantic masks в вопросы terrain/rock coverage с provenance.
 

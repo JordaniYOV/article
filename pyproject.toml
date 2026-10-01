@@ -11,6 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 images = ["Pillow>=10", "numpy>=1.26"]
+distortion = ["numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"]
 hf = ["torch>=2.5", "transformers>=4.49,<5", "accelerate>=1"]
 quantization = ["bitsandbytes>=0.45"]
 stereo = ["Pillow>=10", "numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"]

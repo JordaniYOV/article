@@ -14,6 +14,9 @@ __pycache__/
 !/data_orbital/README.md
 /outputs/*
 !/outputs/README.md
+/example/distorition/
+/src/planetary/distortion/example/
+/src/planetary_vlm/distortion/example/
 /linear_head_approach/outputs/
 /weights/
 /checkpoints/
