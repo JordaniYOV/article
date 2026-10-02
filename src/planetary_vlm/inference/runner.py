@@ -29,7 +29,8 @@ def file_hash(path: Path) -> str:
 def dependency_versions() -> dict[str, str | None]:
     versions = {}
     for name in ("planetary-vlm-benchmark", "Pillow", "numpy", "torch", "transformers",
-                 "accelerate", "bitsandbytes", "peft"):
+                 "accelerate", "bitsandbytes", "peft", "terratorch", "ni_lfm", "llava",
+                 "opencv-python-headless", "PyYAML"):
         try:
             versions[name] = metadata.version(name)
         except metadata.PackageNotFoundError:
@@ -89,6 +90,9 @@ def run(config: RunConfig, *, resume: bool = False) -> Path:
                     or row.get("model_id") != config.model_id or row.get("run_id") != config.run_id):
                 raise ValueError("Resume rejected: duplicate/foreign prediction records")
             completed.add(request_id)
+            if config.backend == "ibm_imp" and row.get("status") == "ok":
+                from planetary_vlm.models.ibm_imp import verify_saved_maps
+                verify_saved_maps(row["raw_response"])
     else:
         if resume:
             raise ValueError("Cannot resume a run that does not exist")
@@ -96,15 +100,32 @@ def run(config: RunConfig, *, resume: bool = False) -> Path:
         write_json(metadata_path, {**expected, "python": platform.python_version(),
                                   "platform": platform.platform(), "options": config.options,
                                   "dependencies": dependency_versions(),
-                                  "timing_protocol": "request_wall_time_including_first_lazy_load_no_warmup",
+                                  "timing_protocol": ("request_wall_time_excludes_initialization_includes_artifact_save_no_warmup"
+                                                      if config.backend in {"spacellava", "ibm_imp"} else
+                                                      "request_wall_time_including_first_lazy_load_no_warmup"),
                                   "config_path": str(config.config_path)})
         write_jsonl(destination / "requests.jsonl", (asdict(item) for item in requests))
     pending = [request for request in requests if request.request_id not in completed]
     if not pending:
         return destination
     random.seed(config.seed)
-    adapter = create_adapter(config.backend, {**config.options, "seed": config.seed})
+    options = {**config.options, "seed": config.seed}
+    if config.backend == "ibm_imp":
+        options["artifact_dir"] = str(destination / "maps")
+    adapter = create_adapter(config.backend, options)
     try:
+        if config.backend in {"spacellava", "ibm_imp"}:
+            start = time.perf_counter()
+            provenance = adapter.initialize()
+            # Resume performs a fresh load and compares actual checkpoint bytes.
+            loading_path = destination / "loading.json"
+            if loading_path.exists():
+                previous = json.loads(loading_path.read_text(encoding="utf-8"))
+                if previous["provenance"] != provenance:
+                    raise ValueError("Resume rejected: model loading provenance changed")
+            else:
+                write_json(loading_path, {"elapsed_seconds": time.perf_counter() - start,
+                                          "provenance": provenance})
         with predictions_path.open("a", encoding="utf-8", newline="\n") as stream:
             for request in pending:
                 start = time.perf_counter()

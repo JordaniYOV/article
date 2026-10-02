@@ -1,0 +1,20 @@
+[run]
+run_id = "full_systems_v1"
+requests = "../../data_orbital/inference/full_systems_v1/requests.jsonl"
+output_dir = "../../outputs/SpaceLLaVA"
+seed = 42
+
+[model]
+id = "remyxai/SpaceLLaVA"
+backend = "spacellava"
+
+[model.options]
+runtime_repo = "../../external/LLaVA"
+code_revision = "c121f0432da27facab705978f83c4ada465e46fd"
+model_dir = "../../weights/SpaceLLaVA"
+model_revision = "5a69f71bda9dea3e4d8113c1047c07fd3da483f8"
+vision_dir = "../../weights/clip-vit-large-patch14-336"
+vision_revision = "ce19dc912ca5cd21c8a653c79e251e808ccabcd1"
+local_files_only = true
+quantization = "4bit"
+device_map = "auto"

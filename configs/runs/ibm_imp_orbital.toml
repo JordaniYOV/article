@@ -1,0 +1,22 @@
+[run]
+run_id = "full_systems_v1"
+requests = "../../data_orbital/inference/full_systems_v1/requests.jsonl"
+output_dir = "../../outputs/NASA-IBM-Lunar-Foundation-Model"
+seed = 42
+
+[model]
+id = "nasa-ibm-ai4science/IMP-Segmentation-NASA-IBM-Lunar-Foundation-Model"
+backend = "ibm_imp"
+
+[model.options]
+runtime_repo = "../../external/NASA-IBM-Lunar-Foundation-Model"
+code_revision = "d54c67aad513cb9daca444afa425cfb278e4fbf8"
+head_config_path = "../../weights/IBM-IMP/config.yaml"
+head_checkpoint_path = "../../weights/IBM-IMP/ni_lfm_ps8_frozen_s44.ckpt"
+head_revision = "10a09ffae35ef5712c40c2a1fc41ec82d4881ea6"
+backbone_config_path = "../../weights/NASA-IBM-Lunar-Foundation-Model/backbone/config.yaml"
+backbone_checkpoint_path = "../../weights/NASA-IBM-Lunar-Foundation-Model/backbone/checkpoint.pt"
+backbone_revision = "b657bdfe6fc4c0445d918f77a2d7b919805f3bce"
+local_files_only = true
+device = "cuda:0"
+input_protocol = "curated_imp_png_reflectance_0_0.12_v1"

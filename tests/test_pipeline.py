@@ -60,37 +60,44 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(report["overall"]["binary"]["fpr"], 1)
             self.assertTrue(report["mock"])
 
-    def test_prepare_reuses_scene_noise_and_keeps_targets_separate(self):
+    def test_orbital_prepare_versions_parameters_and_keeps_targets_separate(self):
         try:
             from PIL import Image
+            import numpy as np
+            import cv2
         except ImportError:
-            self.skipTest("Pillow optional dependency is not installed")
-        from planetary_vlm.transforms.prepare import prepare, expand_targets
+            self.skipTest("Optional image dependencies are not installed")
+        from planetary_vlm.inference.full_systems import prepare_inputs
+        from planetary_vlm.inference.runner import file_hash
         with tempfile.TemporaryDirectory() as task_directory:
             directory = Path(task_directory)
-            Image.new("RGB", (8, 8), (90, 90, 90)).save(directory / "image.png")
-            write_jsonl(directory / "requests.jsonl", [asdict(ModelRequest(
-                key, ("image.png",), "Rock?", ("YES", "NO"))) for key in ("r1", "r2")])
-            (directory / "variants.toml").write_text(
-                'seed=12\n[[variants]]\nid="noise"\ntransform="noise"\n'
-                '[variants.parameters]\nsigma=10\n', encoding="utf-8")
-            prepared = prepare(directory / "requests.jsonl", directory / "variants.toml", directory / "prepared")
+            orbital = directory / "data_orbital"
+            orbital.mkdir()
+            image = orbital / "image.png"
+            Image.fromarray(np.full((256, 256), 90, dtype=np.uint8)).save(image)
+            write_jsonl(orbital / "manifest.jsonl", [{"sample_id": "s1", "planet": "moon",
+                "source_dataset": "imp-fixture", "source_split": "test", "mask_semantics": "imp",
+                "evaluation_eligible": True, "image": "data_orbital/image.png", "image_sha256": file_hash(image),
+                "mask": "never-read.tif", "scene_group_id": "scene", "source_revision": "fixture",
+                "source_image_id": "tile", "license_claim": "fixture-only"}])
+            config = {"dataset": {"manifest": orbital / "manifest.jsonl", "prepared_dir": orbital / "prepared",
+                "source_dataset": "imp-fixture", "splits": ["test"], "conditions": ["clean", "radiation"]},
+                "generation": {"seed": 12, "prompt": "Visible IMP evidence?", "max_new_tokens": 32},
+                "distortion": {"num_hits": 10, "max_streak_length": 5}}
+            prepared, original_metadata = prepare_inputs(config, directory)
             rows = read_jsonl(prepared / "requests.jsonl")
-            self.assertEqual(rows[0]["image_paths"], rows[1]["image_paths"])
             self.assertNotEqual(rows[0]["request_id"], rows[1]["request_id"])
             self.assertTrue(all("answer" not in row for row in rows))
-            write_jsonl(directory / "targets.jsonl", [{"request_id": key, "answer": "YES",
-                "source_sample_id": "s1", "group_id": "g1", "derivation_version": "fixture"}
-                for key in ("r1", "r2")])
-            expand_targets(directory / "targets.jsonl", prepared / "variants.jsonl", directory / "expanded.jsonl")
-            targets = read_jsonl(directory / "expanded.jsonl")
-            self.assertEqual({row["request_id"] for row in targets}, {row["request_id"] for row in rows})
-            self.assertTrue(all(row["condition_id"] == "noise" for row in targets))
-            (directory / "variants.toml").write_text(
-                'seed=12\n[[variants]]\nid="noise"\ntransform="noise"\n'
-                '[variants.parameters]\nsigma=20\n', encoding="utf-8")
-            changed = prepare(directory / "requests.jsonl", directory / "variants.toml", directory / "changed")
-            self.assertNotEqual(read_jsonl(changed / "requests.jsonl")[0]["request_id"], rows[0]["request_id"])
+            self.assertTrue(all(not row["modality_paths"] for row in rows))
+            self.assertEqual(prepare_inputs(config, directory)[0], prepared)
+            config["distortion"]["num_hits"] = 20
+            with self.assertRaisesRegex(ValueError, "Preparation changed"):
+                prepare_inputs(config, directory)
+            config["dataset"]["prepared_dir"] = orbital / "changed"
+            changed, new_metadata = prepare_inputs(config, directory)
+            self.assertNotEqual(original_metadata["protocol_sha256"], new_metadata["protocol_sha256"])
+            self.assertNotEqual(file_hash(Path(rows[1]["image_paths"][0])),
+                file_hash(Path(read_jsonl(changed / "requests.jsonl")[1]["image_paths"][0])))
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ def spoil_image(
     seed: int | None = 0,
     seg_ignore_label: int = 255,
     dem_nodata: float = np.nan,
+    image_only: bool = False,
 ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
     """Apply shear -> shadows -> lens flare -> particle hits to one image.
 
@@ -38,6 +39,7 @@ def spoil_image(
         image, max_shift_px, dem_mask, seg_mask,
         control_spacing_px=control_spacing_px, scan_axis=scan_axis, seed=geometry_seed,
         seg_ignore_label=seg_ignore_label, dem_nodata=dem_nodata,
+        image_only=image_only,
     )
     result = apply_hard_shadows(result, shadow_strength, shadow_seed)
     result = apply_lens_flare(result, flare_strength, flare_seed)

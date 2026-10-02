@@ -1,0 +1,26 @@
+# Secondary complete-system inference, not the primary encoder-probe experiment.
+[dataset]
+workspace_root = ".."
+manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+prepared_dir = "data_orbital/inference/full_systems_v1"
+source_dataset = "nasa-ibm-ai4science/Sombench-IMP-Segmentation"
+splits = ["val", "test"]
+conditions = ["clean", "shear", "radiation", "lens_flare", "hard_shadows", "combined"]
+
+[generation]
+seed = 42
+max_new_tokens = 128
+prompt = "Inspect this lunar orbital image for irregular mare patches (IMP). Describe visible evidence and approximate image locations. State uncertainty if the image does not support a confident identification."
+
+[distortion]
+max_shift_px = 4.0
+control_spacing_px = 32
+scan_axis = "rows"
+num_hits = 80
+max_streak_length = 10
+flare_strength = 0.55
+shadow_strength = 0.65
+
+[models]
+SpaceLLaVA = "configs/runs/spacellava_orbital.toml"
+NASA-IBM-Lunar-Foundation-Model = "configs/runs/ibm_imp_orbital.toml"

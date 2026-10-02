@@ -169,6 +169,11 @@ admission перед научным benchmark. Run TOML предназначен
 
 ## Проверка реализации
 
+Полный pipeline SpaceLLaVA → тексты и NASA–IBM IMP → карты:
+[`FULL_SYSTEMS.md`](src/planetary_vlm/inference/FULL_SYSTEMS.md).
+Команда подготовки: `python -m planetary_vlm full-systems --prepare-only`.
+Результаты каждого запуска сохраняются в `outputs/<название модели>/<run_id>/`.
+
 ```powershell
 & $benchmarkPython -m unittest discover -s tests -v
 ```

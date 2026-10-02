@@ -60,6 +60,7 @@ def apply_synchronous_shear(
     scan_axis: str = "both",
     seg_ignore_label: int = 255,
     dem_nodata: float = np.nan,
+    image_only: bool = False,
 ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None]:
     """Apply smooth seeded line offsets, using identical maps for all rasters.
 
@@ -69,7 +70,8 @@ def apply_synchronous_shear(
     'rows' or 'columns': both components depend on that acquisition scan axis.
     A slope bound may reduce actual amplitude to prevent folded raster geometry.
 
-    Supply exactly one map. Image borders are zero; segmentation borders use
+    Supply exactly one map, or set image_only=True for inference preparation.
+    Image borders are zero; segmentation borders use
     seg_ignore_label. DEM interpolation touching nodata or an exterior pixel
     remains nodata. All outputs are independent arrays, including at zero shift.
     """
@@ -79,7 +81,13 @@ def apply_synchronous_shear(
     if scan_axis not in ("both", "rows", "columns"):
         raise ValueError("scan_axis must be 'both', 'rows' or 'columns'")
     seed_sequence(seed)
-    validate_maps(image, dem_mask, seg_mask, seg_ignore_label, dem_nodata)
+    if type(image_only) is not bool:
+        raise ValueError("image_only must be boolean")
+    if image_only:
+        if dem_mask is not None or seg_mask is not None:
+            raise ValueError("image_only does not accept target maps")
+    else:
+        validate_maps(image, dem_mask, seg_mask, seg_ignore_label, dem_nodata)
     h, w = image.shape[:2]
     if h >= 32767 or w >= 32767:
         raise ValueError("OpenCV remap requires image sides smaller than 32767 pixels")
@@ -90,6 +98,8 @@ def apply_synchronous_shear(
     map_x, map_y = _jitter_maps(h, w, max_shift_px, control_spacing_px, seed, scan_axis)
     sh_image = cv2.remap(image, map_x, map_y, interpolation=cv2.INTER_LINEAR,
                          borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    if image_only:
+        return sh_image, None, None
     if dem_mask is not None:
         valid = np.isfinite(dem_mask)
         if np.isfinite(dem_nodata):

@@ -21,6 +21,13 @@ def main(argv: list[str] | None = None) -> int:
     run_parser = commands.add_parser("run", help="Run one configured backend serially")
     run_parser.add_argument("--config", required=True)
     run_parser.add_argument("--resume", action="store_true")
+    systems = commands.add_parser("full-systems", help="Prepare orbital inputs and run SpaceLLaVA/IBM sequentially")
+    systems.add_argument("--config", default="configs/full_systems.toml")
+    systems.add_argument("--prepare-only", action="store_true")
+    systems.add_argument("--check-only", action="store_true")
+    systems.add_argument("--resume", action="store_true")
+    systems.add_argument("--model", choices=("SpaceLLaVA", "NASA-IBM-Lunar-Foundation-Model"))
+    systems.add_argument("--limit", type=int, help="Number of source images, each with configured conditions")
     evaluate_parser = commands.add_parser("evaluate", help="Score saved responses without loading models")
     for name in ("requests", "targets", "predictions", "output"):
         evaluate_parser.add_argument(f"--{name}", required=True)
@@ -172,6 +179,13 @@ def main(argv: list[str] | None = None) -> int:
             from planetary_vlm.inference.config import load_config
             from planetary_vlm.inference.runner import run
             print(run(load_config(args.config), resume=args.resume))
+        elif args.command == "full-systems":
+            from planetary_vlm.inference.full_systems import execute_pipeline
+            result = execute_pipeline(args.config, prepare_only=args.prepare_only, check_only=args.check_only,
+                                      resume=args.resume, model=args.model, limit=args.limit)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            if any(item["status"] in {"blocked", "incomplete"} for item in result["models"].values()):
+                return 2
         elif args.command == "evaluate":
             from planetary_vlm.evaluation.report import evaluate
             requests = [asdict(request) for request in load_requests(args.requests)]
