@@ -169,6 +169,15 @@ admission перед научным benchmark. Run TOML предназначен
 
 ## Проверка реализации
 
+FastAPI backend с SQLModel/SQLite: [`инструкция`](src/api/README.md).
+Запуск: `python -m uvicorn api.main:app --reload`.
+Swagger доступен на `http://127.0.0.1:8000/docs`.
+
+React-интерфейс: [`frontend/README.md`](frontend/README.md).
+Из папки `frontend/`: `npm.cmd ci`, затем `npm.cmd run dev`.
+Сайт: `http://127.0.0.1:5173`. Для обработки заданий запустите API и отдельный
+`python -m api.worker`; графики используют сохранённые сервером результаты.
+
 Полный pipeline SpaceLLaVA → тексты и NASA–IBM IMP → карты:
 [`FULL_SYSTEMS.md`](src/planetary_vlm/inference/FULL_SYSTEMS.md).
 Команда подготовки: `python -m planetary_vlm full-systems --prepare-only`.

@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+api = ["fastapi>=0.115,<1", "sqlmodel>=0.0.24,<0.1", "pydantic-settings>=2.7,<3", "uvicorn>=0.34,<1", "python-multipart>=0.0.20,<1", "Pillow>=10", "numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"]
+api-test = ["httpx>=0.28,<1"]
 images = ["Pillow>=10", "numpy>=1.26"]
 distortion = ["numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"]
 hf = ["torch>=2.5", "transformers>=4.49,<5", "accelerate>=1"]
@@ -21,8 +23,9 @@ planetary-vlm = "planetary_vlm.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["planetary_vlm*"]
+include = ["planetary_vlm*", "api*"]
 namespaces = false
 
 [tool.setuptools.package-data]
+"api" = ["README.md"]
 "planetary_vlm.datasets._mars" = ["*.ps1", "*.toml"]
