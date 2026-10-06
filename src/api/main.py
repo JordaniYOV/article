@@ -11,14 +11,14 @@ from urllib.parse import urlsplit, urlunsplit
 import zipfile
 from PIL import Image
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile, File, Form
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, select
 
 from .models import (
-    DatasetConfig, DatasetConfigCreate, DatasetConfigRead,
+    DatasetConfig, DatasetConfigCreate, DatasetConfigRead, BuiltinDatasetRequest,
     ImportRun, MetricAnalysis, MetricAnalysisCreate, MetricAnalysisRead,
     ModelConfig, ModelConfigCreate, ModelConfigRead,
     ModelResult, ModelResultCreate, ModelResultRead, Run, RunCreate, DatasetURL, ComparisonCreate, utc_now,
@@ -27,6 +27,7 @@ from .settings import Settings, WORKSPACE_ROOT
 from .datasets import ingest_zip, download_zip, safe_path
 from .runs import create_run, find_run, control_run
 from .evaluation import calculate, report, compare
+from . import builtin_datasets
 
 
 def fingerprint(value) -> str:
@@ -98,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         application.state.settings = settings
         try:
             SQLModel.metadata.create_all(engine)
+            builtin_datasets.recover_jobs()
             yield
         finally:
             engine.dispose()
@@ -155,6 +157,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.put("/dataset-configs/{config_id}", response_model=DatasetConfigRead, tags=["dataset configs"])
     def update_dataset_config(config_id: int, payload: DatasetConfigCreate, session: SessionDep):
         record = get_record(session, DatasetConfig, config_id)
+        if record.provenance.get("builtin_collection") == "orbital_300_v3":
+            raise HTTPException(409, "Builtin source selections are frozen; create a separate dataset configuration")
         ensure_unused_config(session, record, "dataset_config_id")
         values = payload.model_dump()
         record.sqlmodel_update({**values, "config_sha256": fingerprint(values), "updated_at": utc_now()})
@@ -318,6 +322,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.get("/datasets", response_model=list[DatasetConfigRead], tags=["datasets"])
     def datasets(session: SessionDep, offset: Offset = 0, limit: Limit = 100):
         return session.exec(select(DatasetConfig).order_by(DatasetConfig.id).offset(offset).limit(limit)).all()
+
+    @application.get("/datasets/builtin", tags=["datasets"])
+    def builtin_catalog(session: SessionDep):
+        return builtin_datasets.catalog(session)
+
+    @application.get("/datasets/builtin/jobs/{job_id}", tags=["datasets"])
+    def builtin_job(job_id: str):
+        return builtin_datasets.read_job(job_id)
+
+    @application.post("/datasets/builtin/{planet}/ensure", tags=["datasets"])
+    def ensure_builtin(planet: str, payload: BuiltinDatasetRequest, tasks: BackgroundTasks,
+                       response: Response, request: Request, session: SessionDep):
+        result = builtin_datasets.ensure(planet, payload.subset, session, tasks, request.app.state.engine)
+        response.status_code = 200 if result["status"] == "ready" else 202
+        return result
 
     @application.post("/vlm/runs", status_code=202, tags=["runs"])
     def start_vlm(payload: RunCreate, session: SessionDep):

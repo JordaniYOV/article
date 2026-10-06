@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, BarChart3, Box, Database, FileText, FlaskConical, Play, RefreshCw, WifiOff } from 'lucide-react';
 import { api } from './api';
 import { initialProtocol } from './domain';
-import type { Comparison, Dataset, Model, Protocol, Report, Result, Run } from './types';
+import type { BuiltinPlanet, BuiltinSelection, Comparison, Dataset, Model, Protocol, Report, Result, Run } from './types';
 import DatasetPanel from './components/DatasetPanel';
 import ModelPanel from './components/ModelPanel';
 import RunPanel from './components/RunPanel';
@@ -17,6 +17,8 @@ const NAV = [ { id: 'datasets', label: 'Датасеты', icon: Database }, { i
 
 export default function App() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [builtins, setBuiltins] = useState<BuiltinPlanet[]>([]);
+  const [builtinSelection, setBuiltinSelection] = useState<BuiltinSelection | null>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [online, setOnline] = useState<boolean | null>(null);
@@ -43,12 +45,13 @@ export default function App() {
     if (refreshInFlight.current && !invalidate) return;
     refreshInFlight.current = true;
     try {
-      const [health, nextDatasets, nextModels, nextRuns] = await Promise.all([
-        api.health(signal), api.datasets(signal), api.models(signal), api.runs(signal),
+      const [health, nextDatasets, nextModels, nextRuns, nextBuiltins] = await Promise.all([
+        api.health(signal), api.datasets(signal), api.models(signal), api.runs(signal), api.builtins(signal),
       ]);
       if (signal?.aborted) return;
       setOnline(health.status === 'ok'); setCatalogError('');
       setDatasets(nextDatasets); setModels(nextModels); setRuns(nextRuns);
+      setBuiltins(nextBuiltins);
       setModelId((current) => nextModels.some((value) => value.id === current) ? current : nextModels[0]?.id || 0);
       setDatasetId((current) => nextDatasets.some((value) => value.id === current) ? current : nextDatasets[0]?.id || 0);
       setActiveId((current) => current || nextRuns[0]?.id || '');
@@ -63,6 +66,17 @@ export default function App() {
     const timer = setInterval(() => { if (!document.hidden) void refresh(controller.signal, false); }, 3000);
     return () => { controller.abort(); clearInterval(timer); };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!builtinSelection) return;
+    const subset = builtins.find((item) => item.planet === builtinSelection.planet)?.subsets.find((item) => item.id === builtinSelection.subset);
+    const id = subset?.status === 'ready' ? subset.dataset_id : null;
+    setDatasetId(id || 0);
+    const dataset = datasets.find((item) => item.id === id);
+    if (dataset && !dataset.splits.includes(protocol.split)) {
+      setProtocol((value) => ({ ...value, split: dataset.splits.includes('test') ? 'test' : 'val' }));
+    }
+  }, [builtins, builtinSelection, datasets, protocol.split]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,6 +116,18 @@ export default function App() {
     finally { setPending(''); mutationInFlight.current = false; }
   };
   const showError = (value: string) => setNotice({ message: value, kind: 'error' });
+  function chooseDataset(id: number) { setBuiltinSelection(null); setDatasetId(id); }
+  function chooseBuiltin(value: BuiltinSelection) {
+    if (mutationInFlight.current) return;
+    setBuiltinSelection(value); setDatasetId(0);
+    void perform('builtin', async () => {
+      const result = await api.ensureBuiltin(value);
+      if (result.dataset) {
+        setDatasets((current) => [...current.filter((item) => item.id !== result.dataset!.id), result.dataset!]);
+        setDatasetId(result.dataset.id);
+      }
+    });
+  }
   const scroll = (id: string) => { setNav(id); document.getElementById(id)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); };
   return <div className="app-shell"><a href="#workspace" className="skip-link">Перейти к содержимому</a>
     <aside className="sidebar"><a href="#workspace" className="brand-mark" aria-label="Planetary Eval — главная"><Box size={27} /></a>
@@ -114,9 +140,10 @@ export default function App() {
         <button type="button" className="icon-button refresh-button" onClick={() => void refresh()} aria-label="Обновить данные" title="Обновить данные"><RefreshCw size={18} /></button></div>
     </header>
     {catalogError && <div className="connection-banner" role="status"><WifiOff size={19} /><div><strong>Нет соединения с бэкендом</strong><p>{catalogError}</p></div><button type="button" className="secondary-button small-button" onClick={() => void refresh()}>Повторить</button></div>}
-    <div className="setup-grid"><DatasetPanel datasets={datasets} pending={pending} perform={perform} onSelect={setDatasetId} error={showError} />
+    <div className="setup-grid"><DatasetPanel datasets={datasets} pending={pending} perform={perform} onSelect={chooseDataset} error={showError} />
       <ModelPanel models={models} pending={pending} perform={perform} onSelect={setModelId} error={showError} />
-      <RunPanel datasets={datasets} models={models} runs={runs} modelId={modelId} datasetId={datasetId} setModelId={setModelId} setDatasetId={setDatasetId}
+      <RunPanel datasets={datasets} models={models} runs={runs} modelId={modelId} datasetId={datasetId} setModelId={setModelId} setDatasetId={chooseDataset}
+        builtins={builtins} builtinSelection={builtinSelection} chooseBuiltin={chooseBuiltin}
         protocol={protocol} setProtocol={setProtocol} reuseId={reuseId} setReuseId={setReuseId} pending={pending} error={showError}
         start={(value) => { const model = models.find((item) => item.id === modelId); if (!model) return;
           void perform('start', async () => { const run = await api.start(model, datasetId, value, reuseId || undefined); selectRun(run.id); setProtocol(value); }, 'Запуск добавлен в очередь'); }} />

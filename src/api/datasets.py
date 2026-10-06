@@ -80,6 +80,8 @@ def sample_rows(dataset):
         for field in ("mask", "dem"):
             if row.get(field):
                 paths.orbital_path(row[field])
+        if row.get("height_valid_mask"):
+            paths.orbital_path(row["height_valid_mask"])
         selected.append({**row, "image": str(image), "image_sha256": checksum,
             "source_split": split, "scene_group_id": row.get("scene_group_id", sample_id)})
     return sorted(selected, key=lambda item: item["sample_id"])

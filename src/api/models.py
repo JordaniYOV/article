@@ -119,6 +119,10 @@ class DatasetConfigRead(DatasetConfigCreate):
     updated_at: datetime
 
 
+class BuiltinDatasetRequest(Schema):
+    subset: Literal["segmentation", "height", "imp"] = "segmentation"
+
+
 class ModelResultCreate(Schema):
     model_config_id: int = Field(gt=0)
     dataset_config_id: int = Field(gt=0)

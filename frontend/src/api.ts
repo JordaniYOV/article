@@ -1,4 +1,4 @@
-import type { Comparison, Dataset, DatasetMetadata, Model, Protocol, Report, Result, Run } from './types';
+import type { BuiltinPlanet, BuiltinPreparation, BuiltinSelection, Comparison, Dataset, DatasetMetadata, Model, Protocol, Report, Result, Run } from './types';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 export const assetUrl = (path: string) => `${base}${path}`;
@@ -45,6 +45,8 @@ async function all<T>(path: string, signal?: AbortSignal): Promise<T[]> {
 export const api = {
   health: (signal?: AbortSignal) => request<{ status: string }>('/health', { signal }),
   datasets: (signal?: AbortSignal) => all<Dataset>('/datasets', signal),
+  builtins: (signal?: AbortSignal) => request<BuiltinPlanet[]>('/datasets/builtin', { signal }),
+  ensureBuiltin: ({ planet, subset }: BuiltinSelection) => request<BuiltinPreparation>(`/datasets/builtin/${planet}/ensure`, json({ subset })),
   models: (signal?: AbortSignal) => all<Model>('/model-configs', signal),
   runs: (signal?: AbortSignal) => all<Run>('/runs', signal),
   defaults: () => request('/configurations/import-defaults', json()),

@@ -6,6 +6,11 @@ import { model } from './fixtures';
 describe('FastAPI client', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => { fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 202 })); vi.stubGlobal('fetch', fetchMock); });
+  it('resolves exactly the selected planet and subset on the backend', async () => {
+    await api.ensureBuiltin({ planet: 'moon', subset: 'height' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/datasets/builtin/moon/ensure');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ subset: 'height' });
+  });
   it('routes exactly one VLM to the VLM endpoint with an explicit ordered protocol', async () => {
     await api.start(model, 3, initialProtocol);
     const [url, config] = fetchMock.mock.calls[0];

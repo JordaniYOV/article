@@ -6,7 +6,7 @@ import { api } from '../api';
 import { dataset, model, report, run } from './fixtures';
 
 vi.mock('../api', () => ({ assetUrl: (path: string) => '/api' + path,
-  api: Object.fromEntries(['health', 'datasets', 'models', 'runs', 'defaults', 'upload', 'fromUrl', 'saveDataset', 'saveModel',
+  api: Object.fromEntries(['health', 'datasets', 'builtins', 'ensureBuiltin', 'models', 'runs', 'defaults', 'upload', 'fromUrl', 'saveDataset', 'saveModel',
     'deleteDataset', 'deleteModel', 'start', 'control', 'metrics', 'report', 'results', 'compare'].map((key) => [key, vi.fn()])) }));
 // Chart math/values are tested separately; jsdom has no browser layout engine.
 vi.mock('recharts', async () => {
@@ -16,8 +16,10 @@ vi.mock('recharts', async () => {
 });
 
 beforeEach(() => {
+  vi.resetAllMocks();
   vi.mocked(api.health).mockResolvedValue({ status: 'ok' });
   vi.mocked(api.datasets).mockResolvedValue([dataset]);
+  vi.mocked(api.builtins).mockResolvedValue([]);
   vi.mocked(api.models).mockResolvedValue([model]);
   vi.mocked(api.runs).mockResolvedValue([]);
   vi.mocked(api.results).mockResolvedValue([]);
@@ -25,6 +27,39 @@ beforeEach(() => {
 });
 
 describe('evaluation workspace', () => {
+  it('always offers Mars and Moon even before any dataset is registered', async () => {
+    vi.mocked(api.datasets).mockResolvedValue([]);
+    render(<App />); await screen.findByText('Бэкенд подключён');
+    const select = screen.getByLabelText('Выберите датасет');
+    expect(within(select).getByRole('option', { name: 'Марс' })).toHaveValue('builtin:mars');
+    expect(within(select).getByRole('option', { name: 'Луна' })).toHaveValue('builtin:moon');
+  });
+  it('resolves a selected local planet subset and launches with its dataset ID', async () => {
+    const builtin = { ...dataset, id: 20, planet: 'mars' as const, provenance: { builtin_collection: 'orbital_300_v3', split_counts: { test: 12, val: 5 } } };
+    vi.mocked(api.ensureBuiltin).mockImplementation(async () => {
+      vi.mocked(api.datasets).mockResolvedValue([dataset, builtin]);
+      vi.mocked(api.builtins).mockResolvedValue([{ planet: 'mars', label: 'Марс', subsets: [{ id: 'segmentation', label: 'Снимки с масками', status: 'ready', dataset_id: 20, sample_count: 17, split_counts: { test: 12, val: 5 }, job_id: null, completed: 0, total: 17, error: null }] }]);
+      return { status: 'ready', dataset: builtin, job_id: null };
+    });
+    vi.mocked(api.start).mockResolvedValue(run);
+    const user = userEvent.setup(); render(<App />); await screen.findByText('Бэкенд подключён');
+    await user.selectOptions(screen.getByLabelText('Выберите датасет'), 'builtin:mars');
+    await screen.findByText('Локальные данные · 17 снимков. test: 12 · val: 5');
+    await user.click(screen.getByRole('button', { name: 'Запустить сбор ответов' }));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith(model, 20, expect.any(Object), undefined));
+    expect(api.ensureBuiltin).toHaveBeenCalledWith({ planet: 'mars', subset: 'segmentation' });
+  });
+  it('blocks model inference until missing orbital data has been prepared', async () => {
+    vi.mocked(api.ensureBuiltin).mockImplementation(async () => {
+      vi.mocked(api.builtins).mockResolvedValue([{ planet: 'moon', label: 'Луна', subsets: [{ id: 'segmentation', label: 'Снимки с масками', status: 'downloading', dataset_id: null, sample_count: 50, split_counts: {}, job_id: 'job', completed: 4, total: 50, error: null }] }]);
+      return { status: 'queued', dataset: null, job_id: 'job' };
+    });
+    const user = userEvent.setup(); render(<App />); await screen.findByText('Бэкенд подключён');
+    await user.selectOptions(screen.getByLabelText('Выберите датасет'), 'builtin:moon');
+    await screen.findByText('Загрузка и подготовка · 4 / 50');
+    expect(screen.getByRole('button', { name: 'Запустить сбор ответов' })).toBeDisabled();
+    expect(api.start).not.toHaveBeenCalled();
+  });
   it('shows empty-state metrics without inventing scores', async () => {
     render(<App />);
     await screen.findByText('Бэкенд подключён');

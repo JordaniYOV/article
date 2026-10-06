@@ -1,4 +1,14 @@
 export type Effect = 'shear' | 'radiation' | 'lens_flare' | 'hard_shadows';
+export type Planet = 'mars' | 'moon';
+export type BuiltinSubset = 'segmentation' | 'height' | 'imp';
+export interface BuiltinSelection { planet: Planet; subset: BuiltinSubset }
+export interface BuiltinPlanet {
+  planet: Planet; label: string;
+  subsets: { id: BuiltinSubset; label: string; status: string; dataset_id: number | null;
+    sample_count: number; split_counts: Record<string, number>; completed: number; total: number;
+    job_id: string | null; error: string | null }[];
+}
+export interface BuiltinPreparation { status: string; dataset: Dataset | null; job_id: string | null }
 export type Parameters = Record<string, Record<string, unknown>>;
 export interface Dataset {
   id: number; name: string; version: string; planet: 'moon' | 'mars'; task_id: string;
