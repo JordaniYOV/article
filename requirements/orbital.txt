@@ -1,4 +1,5 @@
 numpy==2.2.6
+certifi
 Pillow==12.3.0
 pyarrow==25.0.1
 h5py==3.16.0

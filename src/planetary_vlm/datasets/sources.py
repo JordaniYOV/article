@@ -11,12 +11,14 @@ import hashlib
 import json
 import urllib.request
 
+from planetary_vlm.network import urlopen
+
 
 USER_AGENT = "planetary-vlm-benchmark/source-acquisition-v1"
 
 
 def request(url):
-    return urllib.request.urlopen(
+    return urlopen(
         urllib.request.Request(url, headers={"User-Agent": USER_AGENT}), timeout=45
     )
 

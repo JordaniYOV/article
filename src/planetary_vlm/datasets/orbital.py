@@ -12,8 +12,10 @@ import json
 from pathlib import Path
 import re
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+from urllib.request import Request
 from uuid import uuid4
+
+from planetary_vlm.network import urlopen
 
 from .base import PROJECT_ROOT
 from .sources import download

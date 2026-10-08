@@ -1,4 +1,5 @@
 fastapi>=0.115,<1
+certifi
 uvicorn>=0.34,<1
 sqlmodel>=0.0.24,<0.1
 SQLAlchemy>=2.0.14,<2.1

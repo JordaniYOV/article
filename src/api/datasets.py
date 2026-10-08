@@ -8,6 +8,7 @@ import json
 from pathlib import Path, PurePosixPath
 import shutil
 import socket
+import ssl
 import stat
 import time
 from urllib.parse import urlsplit, urljoin
@@ -17,6 +18,8 @@ import zipfile
 from PIL import Image
 from fastapi import HTTPException
 from sqlmodel import select
+
+from planetary_vlm.network import certificate_error, create_ssl_context
 
 from . import settings as paths
 from .models import DatasetConfig, DatasetConfigCreate
@@ -212,7 +215,10 @@ def download_zip(url, settings):
         address = addresses[0][4][0]
         timeout = max(.1, deadline - time.monotonic())
         cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-        connection = cls(parsed.hostname, port, timeout=timeout)
+        options = {"timeout": timeout}
+        if parsed.scheme == "https":
+            options["context"] = create_ssl_context()
+        connection = cls(parsed.hostname, port, **options)
         # TLS still verifies the original hostname; TCP connects to the checked IP.
         connection._create_connection = lambda _, timeout, source_address=None: socket.create_connection(
             (address, port), timeout, source_address)
@@ -244,6 +250,8 @@ def download_zip(url, settings):
                     raise ValueError("Download exceeds size limit")
             content.seek(0)
             return content
+        except ssl.SSLCertVerificationError as error:
+            raise ValueError(certificate_error(error)) from error
         finally:
             connection.close()
     raise ValueError("Too many redirects")
