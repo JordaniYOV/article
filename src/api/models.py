@@ -32,7 +32,6 @@ class Schema(SQLModel):
             return value.replace(tzinfo=timezone.utc)
         return value
 
-
 class ModelConfigCreate(Schema):
     name: Name
     version: Name = "v1"

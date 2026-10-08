@@ -188,7 +188,17 @@ def materialize(row, cache, root, staging):
         for batch in parquet.iter_batches(batch_size=16):
             for record in batch.to_pylist():
                 if Path(record["image"]["path"]).name == source_id:
-                    return {"image": record["image"]["bytes"], "mask": record["mask"]["bytes"]}
+                    payloads = {"image": record["image"]["bytes"], "mask": record["mask"]["bytes"]}
+                    if repo == "Mirali33/mb-boulder_seg":
+                        # acquire_mars_boulder_test.py decoded embedded TIFFs
+                        # and saved PNGs before the curated hashes were recorded.
+                        # Reproduce that conversion for both image and mask.
+                        for key, payload in payloads.items():
+                            with Image.open(BytesIO(payload)) as image:
+                                if image.size != (500, 500):
+                                    raise ValueError(f"Unexpected boulder {key} size: {image.size}")
+                                payloads[key] = save_image(image)
+                    return payloads
         raise ValueError(f"Selected image absent from pinned Parquet: {source_id}")
     if row.get("mask_semantics") == "imp":
         source = cache.asset(repo, revision, f"all/{source_id}_img.tif")
