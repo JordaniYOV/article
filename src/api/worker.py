@@ -1,4 +1,4 @@
-"""Durable sequential worker. Run separately with python -m api.worker."""
+"""Durable sequential worker. Run with python -m api.worker or this file."""
 
 from contextlib import contextmanager
 from dataclasses import asdict
@@ -7,7 +7,18 @@ import json
 import os
 from pathlib import Path
 import random
+import sys
 import time
+
+# Direct file/IDE launches and python -m src.api.worker do not expose the
+# sibling planetary_vlm package. Delegate to the canonical module before
+# importing application code, using this checkout's src tree.
+if __name__ == "__main__" and __package__ != "api":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from api.worker import main as worker_main
+
+    worker_main()
+    raise SystemExit
 
 from sqlmodel import Session, SQLModel, select
 from sqlalchemy import update as sql_update

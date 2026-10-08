@@ -18,6 +18,21 @@
 & .\.venv-benchmark\Scripts\python.exe -m api.worker
 ```
 
+Запуск файлом из IDE или терминала также поддерживается:
+
+```powershell
+& .\.venv-benchmark\Scripts\python.exe src/api/worker.py
+```
+
+Он подключает соседний пакет `planetary_vlm` из текущего `src/` и сохраняет
+правильный контекст относительных импортов. Для API и worker выбирайте один
+Python-интерпретатор: наличие файлов в IDE не устанавливает пакет в окружение.
+Если команда `python -m api.worker` сообщает `No module named api` или
+`No module named planetary_vlm`, из корня проекта установите пакет именно
+этим интерпретатором: `python -m pip install --no-deps -e .`.
+Проверка импортов без чтения очереди и запуска моделей:
+`python -m api.worker --help`.
+
 `python -m api.worker --once` обрабатывает одно задание. Без worker задания остаются
 queued. Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 API стартует без весов и GPU. Веса и зависимости моделей устанавливаются отдельно;
