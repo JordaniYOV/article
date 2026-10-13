@@ -27,10 +27,11 @@ def file_hash(path: Path) -> str:
 
 
 def dependency_versions() -> dict[str, str | None]:
-    versions = {}
+    versions = {"python": platform.python_version()}
     for name in ("planetary-vlm-benchmark", "Pillow", "numpy", "torch", "transformers",
                  "accelerate", "bitsandbytes", "peft", "terratorch", "ni_lfm", "llava",
-                 "opencv-python-headless", "PyYAML"):
+                 "opencv-python-headless", "PyYAML", "huggingface-hub", "tokenizers",
+                 "safetensors", "sentencepiece", "timm", "einops"):
         try:
             versions[name] = metadata.version(name)
         except metadata.PackageNotFoundError:
@@ -91,7 +92,7 @@ def run(config: RunConfig, *, resume: bool = False) -> Path:
                 raise ValueError("Resume rejected: duplicate/foreign prediction records")
             completed.add(request_id)
             if config.backend == "ibm_imp" and row.get("status") == "ok":
-                from planetary_vlm.models.ibm_imp import verify_saved_maps
+                from benchmark_services.common.segmentation import verify_saved_maps
                 verify_saved_maps(row["raw_response"])
     else:
         if resume:

@@ -1,0 +1,23 @@
+# Allowlisted build context: never include datasets, checkpoints, secrets or archives.
+**
+!pyproject.toml
+!requirements/
+!requirements/**
+!src/
+!src/api/
+!src/api/**
+!src/benchmark_services/
+!src/benchmark_services/**
+!src/planetary_vlm/
+!src/planetary_vlm/**
+!configs/
+!configs/**
+!scripts/
+!scripts/*.py
+!deploy/
+!deploy/**
+src/**/__pycache__/
+src/**/*.pyc
+src/**/*.egg-info/
+src/planetary_vlm/distortion/example/
+deploy/**/.env

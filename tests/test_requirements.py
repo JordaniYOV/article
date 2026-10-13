@@ -1,6 +1,7 @@
 """Offline checks for pip files, profile separation and CUDA wheel selection."""
 
 from pathlib import Path
+import re
 import unittest
 
 try:
@@ -16,38 +17,38 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def profile_lines(path, ancestors=()):
-    path = path.resolve()
-    if path in ancestors or not path.is_relative_to(ROOT):
-        raise ValueError("Cyclic or out-of-workspace requirements include")
+def profile_lines(path):
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        if line.startswith("-r "):
-            yield from profile_lines(path.parent / line[3:].strip(), (*ancestors, path))
-        else:
-            yield line
+        # Service files must be self-contained; no includes, indexes or options.
+        if line.startswith("-"):
+            raise ValueError("Requirements must contain standalone package entries")
+        yield line
 
 
-@unittest.skipIf(Requirement is None, "Install requirements/dev.txt for syntax checks")
+@unittest.skipIf(Requirement is None, "Install requirements/api.txt for syntax checks")
 class RequirementsTests(unittest.TestCase):
     def requirements(self, name):
         return [Requirement(line) for line in profile_lines(ROOT / name)]
 
     def test_every_requirement_file_has_valid_pip_entries(self):
-        paths = [ROOT / "requirements.txt", *(ROOT / "requirements").glob("*.txt")]
+        paths = list((ROOT / "requirements").iterdir())
+        self.assertEqual({p.name for p in paths}, {"api.txt", "spacellava.txt", "ibm-imp.txt"})
+        self.assertFalse((ROOT / "requirements.txt").exists())
         for path in paths:
             with self.subTest(path=path.name):
                 self.assertTrue(self.requirements(str(path.relative_to(ROOT))))
 
-    def test_default_contains_full_spacellava_not_ibm(self):
-        names = {req.name.lower() for req in self.requirements("requirements.txt")}
-        self.assertTrue({"fastapi", "sqlmodel", "pyarrow", "h5py", "torch", "torchvision",
+    def test_spacellava_contains_full_runtime_not_ibm_or_restoration(self):
+        names = {req.name.lower() for req in self.requirements("requirements/spacellava.txt")}
+        self.assertTrue({"fastapi", "sqlmodel", "torch", "torchvision",
                          "transformers", "accelerate", "bitsandbytes", "sentencepiece",
                          "protobuf", "safetensors", "peft", "huggingface-hub"} <= names)
         self.assertNotIn("terratorch", names)
         self.assertNotIn("llava", names)  # local audited source, no obsolete pip pins
+        self.assertFalse(names & {"pyarrow", "h5py", "hdf5plugin", "tifffile", "imagecodecs"})
 
     def test_ibm_contains_published_runtime_dependencies(self):
         names = {req.name.lower() for req in self.requirements("requirements/ibm-imp.txt")}
@@ -73,7 +74,7 @@ class RequirementsTests(unittest.TestCase):
 
     def test_key_profile_constraints_have_a_shared_candidate(self):
         candidates = {
-            "spacellava": {"numpy": "2.2.6", "pyarrow": "25.0.1", "hdf5plugin": "7.1.0",
+            "spacellava": {"numpy": "2.2.6",
                            "Pillow": "12.3.0", "torch": "2.8.0+cu128", "torchvision": "0.23.0+cu128"},
             "ibm-imp": {"numpy": "2.4.4", "pyarrow": "24.0.0", "hdf5plugin": "6.0.0",
                         "Pillow": "12.3.0", "torch": "2.12.0+cu130", "torchvision": "0.27.0+cu130"},
@@ -84,9 +85,37 @@ class RequirementsTests(unittest.TestCase):
                     with self.subTest(profile=profile, requirement=str(req)):
                         self.assertIn(versions[req.name], req.specifier)
 
-    def test_app_does_not_install_a_model_runtime(self):
-        names = {r.name.lower() for r in self.requirements("requirements/app.txt")}
+    def test_api_contains_restoration_and_tests_not_model_runtime(self):
+        names = {r.name.lower() for r in self.requirements("requirements/api.txt")}
+        self.assertTrue({"fastapi", "sqlmodel", "python-multipart", "certifi", "numpy",
+                         "pillow", "opencv-python-headless", "pyarrow", "h5py", "hdf5plugin",
+                         "tifffile", "imagecodecs", "httpx", "packaging"} <= names)
         self.assertFalse(names & {"torch", "transformers", "terratorch", "bitsandbytes"})
+
+    def test_each_service_contains_shared_pipeline_dependencies(self):
+        expected = {"fastapi", "uvicorn", "sqlmodel", "sqlalchemy", "pydantic",
+                    "pydantic-settings", "pillow", "numpy", "opencv-python-headless"}
+        for profile in ("api", "spacellava", "ibm-imp"):
+            with self.subTest(profile=profile):
+                names = {r.name.lower() for r in self.requirements(f"requirements/{profile}.txt")}
+                self.assertTrue(expected <= names)
+                # No duplicate version constraints except platform-specific CUDA URLs.
+                packages = [r.name.lower() for r in self.requirements(f"requirements/{profile}.txt")
+                            if not r.url]
+                self.assertEqual(len(packages), len(set(packages)))
+
+    def test_docker_install_commands_reference_existing_profiles(self):
+        for filename in ("api.Dockerfile", "model.Dockerfile"):
+            content = (ROOT / "deploy" / filename).read_text(encoding="utf-8")
+            references = re.findall(r"-r (requirements/[\w-]+\.txt)", content)
+            self.assertTrue(references)
+            for path in references:
+                with self.subTest(dockerfile=filename, profile=path):
+                    self.assertTrue((ROOT / path).is_file())
+        model = (ROOT / "deploy" / "model.Dockerfile").read_text(encoding="utf-8")
+        mock_branch = model.split('if [ "$PROFILE" = "mock" ]; then', 1)[1].split("elif", 1)[0]
+        self.assertEqual(re.findall(r"-r (requirements/[\w-]+\.txt)", mock_branch),
+                         ["requirements/api.txt"])
 
 
 if __name__ == "__main__":

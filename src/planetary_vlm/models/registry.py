@@ -27,9 +27,9 @@ def create_adapter(backend: str, options: Mapping[str, Any]):
         from .seleno import SelenoNativeAdapter
         return SelenoNativeAdapter(options)
     if backend == "spacellava":
-        from .spacellava import SpaceLLaVAAdapter
+        from benchmark_services.spacellava.adapter import SpaceLLaVAAdapter
         return SpaceLLaVAAdapter(options)
     if backend == "ibm_imp":
-        from .ibm_imp import IBMIMPAdapter
+        from benchmark_services.ibm.adapter import IBMIMPAdapter
         return IBMIMPAdapter(options)
     raise ValueError(f"Unknown model backend: {backend}")

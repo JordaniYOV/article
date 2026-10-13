@@ -1,4 +1,4 @@
-"""Persistent configurations, queued runs, responses and metric analyses."""
+"""Shared persistent configurations, queued runs, responses and metric analyses."""
 
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal

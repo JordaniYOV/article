@@ -1,0 +1,24 @@
+# Standalone public API, orbital data restoration and CPU/mock tests; no Torch.
+# Installation specification, not a tested environment lockfile. Python 3.12 recommended.
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+sqlmodel>=0.0.24,<0.1
+SQLAlchemy>=2.0.14,<2.1
+pydantic>=2.9,<3
+pydantic-settings>=2.7,<3
+python-multipart>=0.0.20,<1
+certifi>=2024.2.2
+
+# Image preparation and orbital Parquet/HDF5/TIFF restoration run in API only.
+Pillow>=10,<13
+numpy>=1.26,<3
+opencv-python-headless>=4.12,<4.14
+pyarrow>=24,<26
+h5py>=3.16,<4
+hdf5plugin>=6,<8
+tifffile>=2026.9.20
+imagecodecs>=2026.8.16
+
+# Lightweight software tests, also used by both services in explicit mock mode.
+httpx>=0.28,<1
+packaging>=24,<27

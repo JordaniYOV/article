@@ -18,9 +18,9 @@ try:
     from fastapi.testclient import TestClient
     from sqlmodel import Session, select
     from api.main import create_app
-    from api.models import Run, ModelResult
-    from api.settings import Settings
-    from api.worker import run_once, gpu_lock
+    from benchmark_services.common.store import Run, ModelResult
+    from benchmark_services.common.settings import Settings
+    from benchmark_services.common.execution import run_once, gpu_lock
 except ImportError:
     TestClient = None
 
@@ -30,7 +30,7 @@ class RunApiTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.workspace = Path(self.temporary.name)
-        self.patch_paths = patch("api.settings.WORKSPACE_ROOT", self.workspace)
+        self.patch_paths = patch("benchmark_services.common.settings.WORKSPACE_ROOT", self.workspace)
         self.patch_paths.start()
         self.settings = Settings(database_path=self.workspace / ".state" / "api.sqlite3", _env_file=None)
         self.app = create_app(self.settings)
@@ -211,7 +211,7 @@ class RunApiTests(unittest.TestCase):
         self.model("NASA-IBM-Lunar-Foundation-Model", backend="ibm_imp",
             options={"input_protocol": "curated_imp_png_reflectance_0_0.12_v1"})
         from planetary_vlm.contracts import ModelResponse
-        from planetary_vlm.models.ibm_imp import save_maps
+        from benchmark_services.common.segmentation import save_maps
         class FixtureHead:
             def __init__(self, options):
                 self.options = options
@@ -226,7 +226,7 @@ class RunApiTests(unittest.TestCase):
             def close(self):
                 pass
         run, _ = self.start(dataset, endpoint="vit", name="NASA-IBM-Lunar-Foundation-Model", distortions=[["shear"]])
-        with patch("api.worker.create_adapter", side_effect=lambda backend, options: FixtureHead(options)):
+        with patch("benchmark_services.common.execution.create_adapter", side_effect=lambda backend, options: FixtureHead(options)):
             self.process(run)
         response = self.client.post(f"/runs/{run['id']}/metrics")
         self.assertEqual(response.status_code, 200, response.text)

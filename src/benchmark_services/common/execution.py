@@ -1,8 +1,6 @@
-"""Durable sequential worker. Run with python -m api.worker or this file."""
+"""Shared durable execution; model services run only explicitly selected jobs."""
 
-from contextlib import contextmanager
 from dataclasses import asdict
-import argparse
 import json
 import os
 from pathlib import Path
@@ -10,71 +8,18 @@ import random
 import sys
 import time
 
-# Direct file/IDE launches and python -m src.api.worker do not expose the
-# sibling planetary_vlm package. Delegate to the canonical module before
-# importing application code, using this checkout's src tree.
-if __name__ == "__main__" and __package__ != "api":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from api.worker import main as worker_main
-
-    worker_main()
-    raise SystemExit
-
 from sqlmodel import Session, SQLModel, select
 from sqlalchemy import update as sql_update
 
-from planetary_vlm.contracts import ModelRequest, ModelResponse
+from planetary_vlm.contracts import ModelResponse
 from planetary_vlm.inference.runner import dependency_versions
 from planetary_vlm.models.registry import create_adapter
 from . import settings as paths
-from .datasets import digest, file_hash, safe_path
-from .models import DatasetConfig, ModelConfig, ModelResult, ModelResultCreate, Run, utc_now
-from .transforms import apply_chain, variants
+from .files import digest, file_hash, safe_path, atomic_json
+from .locks import gpu_lock
+from .store import DatasetConfig, ModelConfig, ModelResult, ModelResultCreate, Run, utc_now
+from .preparation import load_bundle, prepare_bundle, PreparationCancelled
 
-
-@contextmanager
-def gpu_lock(settings):
-    """OS lock is released on crash; one GPU worker per project across databases."""
-    lock_path = paths.WORKSPACE_ROOT / ".state" / "api-worker.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    stream = lock_path.open("a+b")
-    try:
-        stream.seek(0, 2)
-        if stream.tell() == 0:
-            stream.write(b"0")
-            stream.flush()
-        stream.seek(0)
-        if os.name == "nt":
-            import msvcrt
-            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        try:
-            yield
-        finally:
-            stream.seek(0)
-            if os.name == "nt":
-                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(stream, fcntl.LOCK_UN)
-    finally:
-        stream.close()
-
-
-def atomic_json(path, value, *, lines=False):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    with temporary.open("w", encoding="utf-8", newline="\n") as stream:
-        if lines:
-            for row in value:
-                stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False, default=str) + "\n")
-        else:
-            json.dump(value, stream, ensure_ascii=False, allow_nan=False, default=str, indent=2)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
 
 
 def update(engine, run_id, **values):
@@ -108,7 +53,7 @@ def export_predictions(engine, run):
 
 
 def map_artifacts(raw, folder):
-    from planetary_vlm.models.ibm_imp import verify_saved_maps
+    from .segmentation import verify_saved_maps
     artifacts = json.loads(raw)
     if Path(artifacts["map_directory"]).resolve() != (folder / "maps").resolve():
         raise ValueError("Segmentation maps must belong to this run")
@@ -120,7 +65,7 @@ def map_artifacts(raw, folder):
     return artifacts
 
 
-def execute(engine, run_id):
+def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
     adapter = None
     cleanup_failed = None
     try:
@@ -129,7 +74,6 @@ def execute(engine, run_id):
             model, dataset = session.get(ModelConfig, run.model_config_id), session.get(DatasetConfig, run.dataset_config_id)
             prior = session.exec(select(ModelResult).where(ModelResult.run_id == run.id)).all()
         folder = safe_path(run.output_dir, paths.WORKSPACE_ROOT / "outputs")
-        input_folder = safe_path(run.id, paths.WORKSPACE_ROOT / "data_orbital" / "inference" / "api")
         protocol = run.protocol
         if not model.enabled or model.config_sha256 != protocol["model_config_sha256"]:
             raise ValueError("Model configuration changed or was disabled")
@@ -139,34 +83,11 @@ def execute(engine, run_id):
             raise ValueError("Source selection changed")
         import numpy as np
         from PIL import Image
-        requests, records = [], {}
         update(engine, run.id, phase="preparing")
-        for source in run.samples:
-            if cancelled(engine, run.id):
-                update(engine, run.id, status="cancelled", phase="stopped")
-                return
-            image_path = paths.orbital_path(source["image"])
-            if file_hash(image_path) != source["image_sha256"]:
-                raise ValueError("Source image changed; resume refused")
-            with Image.open(image_path) as image:
-                pixels = np.array(image)
-            for condition, chain in variants(protocol):
-                request_id = digest([source["sample_id"], condition])
-                destination = input_folder / "images" / (request_id + ".png")
-                transformed, _ = apply_chain(pixels.copy(), chain, protocol["parameters"], protocol["seed"], source["sample_id"])
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                temporary = destination.with_suffix(".tmp")
-                Image.fromarray(transformed).save(temporary, format="PNG")
-                if destination.exists() and file_hash(destination) != file_hash(temporary):
-                    temporary.unlink()
-                    raise ValueError("Prepared image changed or transform implementation differs")
-                os.replace(temporary, destination)
-                request = ModelRequest(request_id, (str(destination),), protocol["prompt"],
-                    tuple(protocol["allowed_answers"]), max_new_tokens=model.max_new_tokens)
-                requests.append(request)
-                records[request_id] = {"source_sample_id": source["sample_id"], "scene_group_id": source["scene_group_id"],
-                    "source_split": source["source_split"], "condition_id": condition,
-                    "input_sha256": file_hash(destination), "chain": chain}
+        if prepared_only:
+            requests, records, prepared_hash = load_bundle(run)
+        else:
+            requests, records, prepared_hash = prepare_bundle(run, lambda: cancelled(engine, run.id))
         for row in prior:
             if row.request_id not in records or row.run_metadata["input_sha256"] != records[row.request_id]["input_sha256"]:
                 raise ValueError("Saved response input differs from prepared input")
@@ -176,17 +97,31 @@ def execute(engine, run_id):
         export_predictions(engine, run)
         metadata_path = folder / "run.json"
         versions = dependency_versions()
+        is_mock = mock_mode or model.backend == "mock"
+        execution_mode = "mock" if is_mock else "real"
+        pipeline_files = {name: file_hash(Path(__file__).with_name(name))
+            for name in ("execution.py", "worker.py", "files.py", "preparation.py", "transforms.py",
+                         "segmentation.py", "fixtures.py", "local_runtime.py")}
+        adapter_package = {"spacellava": "spacellava", "ibm_imp": "ibm"}.get(model.backend)
+        if adapter_package:
+            pipeline_files["adapter.py"] = file_hash(Path(__file__).resolve().parents[1] / adapter_package / "adapter.py")
+        pipeline_hash = digest(pipeline_files)
         if metadata_path.exists():
             saved_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             if (saved_metadata["protocol_sha256"] != run.protocol_sha256
                 or saved_metadata["model"]["config_sha256"] != model.config_sha256
-                or saved_metadata["dependencies"] != versions):
+                or saved_metadata["dependencies"] != versions
+                or saved_metadata.get("execution_mode") != execution_mode
+                or saved_metadata.get("pipeline_sha256") != pipeline_hash
+                or saved_metadata.get("prepared_sha256") != prepared_hash):
                 raise ValueError("Run metadata or dependency versions changed; resume refused")
         elif prior:
             raise ValueError("Saved responses have no run metadata; resume refused")
         else:
             atomic_json(metadata_path, {**run.model_dump(), "model": model.model_dump(),
-                "dependencies": versions, "mock": model.backend == "mock",
+                "dependencies": versions, "mock": is_mock, "execution_mode": execution_mode,
+                "pipeline_sha256": pipeline_hash, "prepared_sha256": prepared_hash,
+                "python_executable": sys.executable,
                 "timing_protocol": "request_wall_seconds_excludes_explicit_initialization_includes_map_save_no_warmup"})
         atomic_json(folder / "requests.jsonl", [asdict(request) for request in requests], lines=True)
         # Evaluation-only source metadata lives separately from model requests.
@@ -196,19 +131,26 @@ def execute(engine, run_id):
             update(engine, run.id, status="cancelled", phase="stopped")
             return
         if pending:
+            update(engine, run.id, loading={**run.loading, "mock": is_mock,
+                "execution_mode": execution_mode, "pipeline_sha256": pipeline_hash})
             update(engine, run.id, phase="loading", completed=len(done))
             random.seed(protocol["seed"])
             np.random.seed(protocol["seed"])
             options = {**model.options, "seed": protocol["seed"], "local_files_only": True}
             if model.backend == "ibm_imp":
                 options["artifact_dir"] = str(folder / "maps")
-            adapter = create_adapter(model.backend, options)
+            if mock_mode and model.backend != "mock":
+                from .fixtures import ServiceFixture
+                adapter = ServiceFixture(model.backend, options)
+            else:
+                adapter = create_adapter(model.backend, options)
             if hasattr(adapter, "initialize"):
                 start = time.perf_counter()
                 provenance = adapter.initialize()
-                if run.loading and run.loading.get("provenance") != provenance:
+                if run.loading.get("provenance") is not None and run.loading["provenance"] != provenance:
                     raise ValueError("Loaded checkpoint provenance changed; resume refused")
-                loading = {"elapsed_seconds": time.perf_counter() - start, "provenance": provenance}
+                loading = {"elapsed_seconds": time.perf_counter() - start, "provenance": provenance,
+                    "mock": is_mock, "execution_mode": execution_mode, "pipeline_sha256": pipeline_hash}
                 update(engine, run.id, loading=loading)
                 atomic_json(folder / "loading.json", loading)
             update(engine, run.id, phase="inference")
@@ -241,7 +183,7 @@ def execute(engine, run_id):
                 output_type="imp_segmentation" if run.kind == "vit" else "text",
                 status=response.status, raw_response=response.raw_response,
                 elapsed_seconds=response.elapsed_seconds, error_message=response.error_message,
-                artifacts=artifacts, run_metadata=source, mock=model.backend == "mock"))
+                artifacts=artifacts, run_metadata=source, mock=is_mock))
             with Session(engine) as session:
                 current = session.get(Run, run.id)
                 current.completed += 1
@@ -253,6 +195,8 @@ def execute(engine, run_id):
             export_predictions(engine, run)
         update(engine, run.id, status="cancelled" if cancelled(engine, run.id) else "completed",
             phase="finished", completed=len(requests))
+    except PreparationCancelled:
+        update(engine, run_id, status="cancelled", phase="stopped")
     except Exception as error:
         update(engine, run_id, status="blocked", phase="stopped", error_message=f"{type(error).__name__}: {error}")
     finally:
@@ -286,7 +230,7 @@ def process_next(engine):
 
 
 def run_once(settings):
-    """Process one queued job; useful for CLI --once and integration tests."""
+    """In-process regression-test helper; production uses run_selected only."""
     engine = settings.create_engine()
     try:
         SQLModel.metadata.create_all(engine)
@@ -297,27 +241,33 @@ def run_once(settings):
         engine.dispose()
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--once", action="store_true")
-    args = parser.parse_args()
-    settings = paths.Settings()
-    if args.once:
-        run_once(settings)
-        return
+def run_selected(settings, run_id, backends, *, mock_mode=False):
+    """Claim this exact queued job under the GPU lock; never consume a different model."""
     engine = settings.create_engine()
     try:
         SQLModel.metadata.create_all(engine)
         with gpu_lock(settings):
+            with Session(engine) as session:
+                selected = session.get(Run, run_id)
+                if selected is None:
+                    raise ValueError("Run not found")
+                model = session.get(ModelConfig, selected.model_config_id)
+                if model.backend not in backends:
+                    raise ValueError("Run belongs to a different model service")
+                if selected.status != "queued":
+                    return False
             recover(engine)
-            while True:
-                if not process_next(engine):
-                    time.sleep(settings.worker_poll_seconds)
-    except KeyboardInterrupt:
-        pass
+            with Session(engine) as session:
+                claimed = session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "queued").values(
+                    status="running", phase="preparing", error_message=None, updated_at=utc_now()))
+                session.commit()
+                if claimed.rowcount != 1:
+                    return False
+            attempt_id = os.environ.get("PLANETARY_SERVICE_ATTEMPT_ID")
+            if attempt_id:
+                folder = safe_path(selected.output_dir, paths.WORKSPACE_ROOT / "outputs")
+                atomic_json(folder / "service-attempt.json", {"attempt_id": attempt_id, "claimed": True})
+            execute(engine, run_id, mock_mode=mock_mode, prepared_only=True)
+            return True
     finally:
         engine.dispose()
-
-
-if __name__ == "__main__":
-    main()

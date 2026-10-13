@@ -1,4 +1,4 @@
-"""Ordered distortion chains with stable per-source, per-effect seeds."""
+"""Shared distortion chains with stable per-source, per-effect seeds."""
 
 import hashlib
 

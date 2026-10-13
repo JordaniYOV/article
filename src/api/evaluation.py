@@ -10,13 +10,20 @@ from sqlmodel import select
 
 from planetary_vlm.evaluation.metrics import classification_metrics, paired_accuracy_bootstrap
 from planetary_vlm.evaluation.parser import parse_answer
-from . import settings as paths
-from .datasets import digest, file_hash, safe_path
-from .models import DatasetConfig, MetricAnalysis, ModelConfig, ModelResult
+from benchmark_services.common import settings as paths
+from benchmark_services.common.files import digest, file_hash, safe_path
+from benchmark_services.common.store import DatasetConfig, MetricAnalysis, ModelConfig, ModelResult
 from .runs import find_run
-from .transforms import apply_chain, variants
+from benchmark_services.common.transforms import apply_chain, variants
+from benchmark_services.common.preparation import renderer_provenance
 
 METHOD = "orbital-api-metrics-v1"
+
+
+def run_is_mock(run, model):
+    # Service fixtures retain the configured real backend name, but the worker
+    # persists their actual execution mode in the authoritative SQLite journal.
+    return model.backend == "mock" or run.loading.get("mock", False) is True
 
 
 def run_results(session, run_id):
@@ -47,7 +54,7 @@ def classification(rows, sources, run):
 def segmentation(rows, sources, run, chain):
     import numpy as np
     from PIL import Image
-    from .worker import map_artifacts
+    from benchmark_services.common.execution import map_artifacts
     confusion = np.zeros((2, 2), dtype=np.int64)
     supported, successful, evaluated_pixels = 0, 0, 0
     for row in rows:
@@ -112,7 +119,7 @@ def calculate(session, run_id):
         raise HTTPException(409, "Run responses are incomplete or mix fixture and real outputs")
     model = session.get(ModelConfig, run.model_config_id)
     if any((row.model_config_id, row.dataset_config_id, row.output_type, row.mock) !=
-        (run.model_config_id, run.dataset_config_id, "text" if run.kind == "vlm" else "imp_segmentation", model.backend == "mock") for row in results):
+        (run.model_config_id, run.dataset_config_id, "text" if run.kind == "vlm" else "imp_segmentation", run_is_mock(run, model)) for row in results):
         raise HTTPException(409, "Response scope or provenance differs from the run")
     sources = {row["sample_id"]: row for row in run.samples}
     signature = digest([row.model_dump() for row in results])
@@ -120,6 +127,8 @@ def calculate(session, run_id):
         MetricAnalysis.method_version == METHOD, MetricAnalysis.results_sha256 == signature)).first()
     # For segmentation, targets/maps are reverified even for an idempotent call.
     try:
+        if run.protocol.get("renderer") is not None and run.protocol["renderer"] != renderer_provenance():
+            raise ValueError("API renderer environment changed; restore it before aligning/evaluating targets")
         dataset = session.get(DatasetConfig, run.dataset_config_id)
         if file_hash(dataset.manifest_path) != run.protocol["manifest_sha256"]:
             raise ValueError("Source manifest changed after inference")
@@ -182,7 +191,7 @@ def calculate(session, run_id):
             session.add(record)
             session.commit()
             session.refresh(record)
-        from .worker import atomic_json
+        from benchmark_services.common.files import atomic_json
         atomic_json(Path(run.output_dir) / "metrics.json", record.model_dump())
         return record
     except (OSError, ValueError, KeyError, TypeError) as error:
@@ -201,7 +210,7 @@ def report(session, run_id):
         "progress": {"completed": run.completed, "total": run.total}, "error": run.error_message,
         "model": {"name": model.name, "version": model.version, "backend": model.backend},
         "dataset": {"id": dataset.id, "name": dataset.name, "planet": dataset.planet, "task_id": dataset.task_id},
-        "mock": model.backend == "mock", "metrics_status": "calculated" if analysis else "not_calculated",
+        "mock": run_is_mock(run, model), "metrics_status": "calculated" if analysis else "not_calculated",
         "analysis_id": analysis.id if analysis else None, "metrics": analysis.metrics if analysis else None,
         "protocol_sha256": run.protocol_sha256,
         "results_url": f"/runs/{run.id}/results", "output_directory": run.output_dir}

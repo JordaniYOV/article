@@ -60,13 +60,27 @@ Native Seleno входы и ограничения описаны в `docs/proto
 уникальных снимков Луны и Марса; это не прежняя задача сбора 300 лунных
 rover-view кадров.
 
+## API и изолированные сервисы моделей
+
+`src/api/` обслуживает сайт и очередь; `src/benchmark_services/common/`
+содержит общий pipeline, хранение и подготовку входов; `spacellava/` и `ibm/`
+содержат отдельные HTTP сервисы, workers и адаптеры. API не импортирует модели.
+Каждый сервис использует свой Python; общий GPU lock допускает одно задание.
+Одинаковые image-only варианты готовятся один раз на стороне API и проверяются
+по SHA-256 обоими worker. Старый `src/api/worker.py` удалён.
+
+Команды трёх процессов, CPU mock-проверки без RTX и подготовленный Docker Compose:
+[deploy/README.md](deploy/README.md). Docker/GPU запуск не проверен; CPU fixtures
+не являются научными результатами. Исторические датасеты и результаты сохранены.
+
 ## Установка
 
-Для API, orbital I/O и полной SpaceLLaVA добавлен корневой `requirements.txt`.
-NASA–IBM использует отдельный профиль `requirements/ibm-imp.txt` и отдельное
-окружение: версии библиотек конфликтуют. Команды и ограничения описаны в
-[`requirements/README.md`](requirements/README.md). GPU-профили пока не прошли
-smoke test; requirements не устанавливает Windows C++ runtime, драйвер или веса.
+В `requirements/` три самостоятельных файла: `api.txt` для API, orbital I/O
+и CPU/mock-тестов; `spacellava.txt` для SpaceLLaVA; `ibm-imp.txt` для NASA–IBM.
+Корневого `requirements.txt` и вложенных профилей больше нет. Модели используют
+разные окружения: версии библиотек конфликтуют. Команды и ограничения описаны в
+[deploy/README.md](deploy/README.md). GPU-профили пока не прошли smoke test;
+requirements не устанавливает Windows C++ runtime, драйвер или веса.
 
 Создано отдельное рабочее окружение `.venv-benchmark` (Python 3.12). В нём
 проект установлен editable с Pillow/NumPy. Старое `.venv` остаётся неисправным.
@@ -187,8 +201,9 @@ Swagger доступен на `http://127.0.0.1:8000/docs`.
 
 React-интерфейс: [`frontend/README.md`](frontend/README.md).
 Из папки `frontend/`: `npm.cmd ci`, затем `npm.cmd run dev`.
-Сайт: `http://127.0.0.1:5173`. Для обработки заданий запустите API и отдельный
-`python -m api.worker`; графики используют сохранённые сервером результаты.
+Сайт: `http://127.0.0.1:5173`. Для обработки заданий запустите API с диспетчером
+и два model services по [инструкции](deploy/README.md); графики используют
+сохранённые сервером результаты. Старый `api.worker` больше не используется.
 
 Полный pipeline SpaceLLaVA → тексты и NASA–IBM IMP → карты:
 [`FULL_SYSTEMS.md`](src/planetary_vlm/inference/FULL_SYSTEMS.md).

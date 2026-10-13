@@ -119,7 +119,7 @@ def prepare_inputs(config, root, *, limit=None):
                 raise ValueError("Prepared inputs are missing or changed")
         return folder, previous
     # Validation before writing catches missing dependencies and incompatible PNGs.
-    from planetary_vlm.models.ibm_imp import restore_imp_png
+    from benchmark_services.common.segmentation import restore_imp_png
     for _, image in sources:
         restore_imp_png(image)
     requests, provenance = [], []

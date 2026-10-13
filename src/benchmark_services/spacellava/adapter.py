@@ -9,7 +9,7 @@ from pathlib import Path
 from time import perf_counter
 
 from planetary_vlm.contracts import ModelResponse
-from .local_runtime import checked_repo, hashes, import_local, local_path, offline_imports, release
+from ..common.local_runtime import checked_repo, hashes, import_local, local_path, offline_imports, release
 
 
 class SpaceLLaVAAdapter:

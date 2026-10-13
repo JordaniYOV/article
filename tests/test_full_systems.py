@@ -18,7 +18,8 @@ from planetary_vlm.inference.config import RunConfig
 from planetary_vlm.inference.full_systems import load_pipeline, prepare_inputs, execute_pipeline
 from planetary_vlm.inference.runner import file_hash, run
 from planetary_vlm.io import write_jsonl, read_jsonl
-from planetary_vlm.models.ibm_imp import restore_imp_png, save_maps, validate_head_keys, verify_saved_maps
+from benchmark_services.common.segmentation import restore_imp_png, save_maps, verify_saved_maps
+from benchmark_services.ibm.adapter import validate_head_keys
 
 try:
     import numpy as np
@@ -152,7 +153,7 @@ class FullSystemsTests(unittest.TestCase):
             self.assertEqual(events, ["close"])
 
     def test_spacellava_native_generation_decodes_only_returned_ids(self):
-        from planetary_vlm.models.spacellava import SpaceLLaVAAdapter
+        from benchmark_services.spacellava.adapter import SpaceLLaVAAdapter
         messages, calls = [], []
         class Tensor:
             def to(self, *args, **kwargs): return self
@@ -184,7 +185,7 @@ class FullSystemsTests(unittest.TestCase):
             adapter.model = SimpleNamespace(config=SimpleNamespace(mm_use_im_start_end=False),
                 get_vision_tower=lambda: SimpleNamespace(device="fixture", dtype="fixture"),
                 get_input_embeddings=lambda: SimpleNamespace(weight=SimpleNamespace(device="fixture")), generate=generate)
-            with patch("planetary_vlm.models.spacellava.importlib.import_module", side_effect=lambda name: modules[name]):
+            with patch("benchmark_services.spacellava.adapter.importlib.import_module", side_effect=lambda name: modules[name]):
                 response = adapter.predict(ModelRequest("fixture", (str(image),), "Visible IMP evidence?", (), 128))
             self.assertEqual(response.raw_response, "native generated answer")
             self.assertEqual(messages[0], ("user", "<image>\nVisible IMP evidence?"))

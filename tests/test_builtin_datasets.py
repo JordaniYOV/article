@@ -11,7 +11,7 @@ try:
     from PIL import Image
     from fastapi.testclient import TestClient
     from api.main import create_app
-    from api.settings import Settings
+    from benchmark_services.common.settings import Settings
     from planetary_vlm.datasets.orbital import download_dataset, inspect_subset
 except ImportError:
     TestClient = None
@@ -47,7 +47,7 @@ class BuiltinTests(unittest.TestCase):
                 manifest.write_text("".join(json.dumps(r) + "\n" for r in self.spec["tracks"][planet][track]), encoding="utf-8")
         recipe = self.root / "recipe.json"
         recipe.write_text(json.dumps(self.spec), encoding="utf-8")
-        self.patches = [patch("api.settings.WORKSPACE_ROOT", self.root), patch("planetary_vlm.datasets.orbital.RECOVERY", recipe)]
+        self.patches = [patch("benchmark_services.common.settings.WORKSPACE_ROOT", self.root), patch("planetary_vlm.datasets.orbital.RECOVERY", recipe)]
         for item in self.patches:
             item.start()
         self.settings = Settings(database_path=self.root / ".state/api.sqlite3", _env_file=None)

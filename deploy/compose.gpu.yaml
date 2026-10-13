@@ -1,0 +1,59 @@
+# Explicit GPU override; not built or smoke tested. Requires separate authorization.
+services:
+  spacellava:
+    build:
+      args: {PROFILE: gpu}
+    environment:
+      PLANETARY_API_SERVICE_MOCK: "false"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - type: bind
+        source: ../external/LLaVA
+        target: /workspace/external/LLaVA
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ../weights/SpaceLLaVA
+        target: /workspace/weights/SpaceLLaVA
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ../weights/clip-vit-large-patch14-336
+        target: /workspace/weights/clip-vit-large-patch14-336
+        read_only: true
+        bind: {create_host_path: false}
+
+  ibm:
+    build:
+      args: {PROFILE: gpu}
+    environment:
+      PLANETARY_API_SERVICE_MOCK: "false"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - type: bind
+        source: ../external/NASA-IBM-Lunar-Foundation-Model
+        target: /workspace/external/NASA-IBM-Lunar-Foundation-Model
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ../weights/IBM-IMP
+        target: /workspace/weights/IBM-IMP
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ../weights/NASA-IBM-Lunar-Foundation-Model
+        target: /workspace/weights/NASA-IBM-Lunar-Foundation-Model
+        read_only: true
+        bind: {create_host_path: false}

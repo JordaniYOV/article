@@ -17,17 +17,20 @@ from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, select
 
-from .models import (
+from benchmark_services.common.store import (
     DatasetConfig, DatasetConfigCreate, DatasetConfigRead, BuiltinDatasetRequest,
     ImportRun, MetricAnalysis, MetricAnalysisCreate, MetricAnalysisRead,
     ModelConfig, ModelConfigCreate, ModelConfigRead,
     ModelResult, ModelResultCreate, ModelResultRead, Run, RunCreate, DatasetURL, ComparisonCreate, utc_now,
 )
-from .settings import Settings, WORKSPACE_ROOT
-from .datasets import ingest_zip, download_zip, safe_path
+from benchmark_services.common.settings import Settings, WORKSPACE_ROOT
+from .datasets import ingest_zip, download_zip
+from benchmark_services.common.files import safe_path
 from .runs import create_run, find_run, control_run
 from .evaluation import calculate, report, compare
 from . import builtin_datasets
+from .dispatcher import Dispatcher
+from .service_client import ServiceClient, ServiceUnavailable, ServiceRejected
 
 
 def fingerprint(value) -> str:
@@ -97,11 +100,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = settings.create_engine()
         application.state.engine = engine
         application.state.settings = settings
+        dispatcher = Dispatcher(engine, settings)
+        application.state.dispatcher = dispatcher
         try:
             SQLModel.metadata.create_all(engine)
             builtin_datasets.recover_jobs()
+            if settings.dispatcher_enabled:
+                dispatcher.start()
             yield
         finally:
+            dispatcher.close()
             engine.dispose()
 
     application = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -115,6 +123,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health(session: SessionDep):
         session.exec(select(1)).one()
         return {"status": "ok", "database": "sqlite"}
+
+    @application.get("/services", tags=["health"])
+    def service_health():
+        client = ServiceClient(settings)
+        result = {}
+        for service in ("spacellava", "ibm"):
+            try:
+                result[service] = client.health(service)
+            except (ServiceUnavailable, ServiceRejected) as error:
+                result[service] = {"status": "unavailable", "error": str(error)}
+        return {"dispatcher_enabled": settings.dispatcher_enabled,
+            "dispatcher_error": application.state.dispatcher.last_error, "services": result}
 
     @application.post("/model-configs", response_model=ModelConfigRead, status_code=201, tags=["model configs"])
     def create_model_config(payload: ModelConfigCreate, session: SessionDep):
@@ -390,10 +410,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "Result does not belong to the run")
         try:
             if asset == "image":
-                from .settings import orbital_path
+                from benchmark_services.common.settings import orbital_path
                 path = orbital_path(row.image_paths[0])
             elif asset == "map" and row.output_type == "imp_segmentation" and row.status == "ok":
-                from .worker import map_artifacts
+                from benchmark_services.common.execution import map_artifacts
                 artifacts = map_artifacts(row.raw_response, Path(run.output_dir))
                 path = safe_path(artifacts["label_png"], Path(run.output_dir) / "maps")
             else:

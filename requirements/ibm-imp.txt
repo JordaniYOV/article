@@ -2,8 +2,16 @@
 # Mirrors NASA-IBM requirements at d54c67aad513cb9daca444afa425cfb278e4fbf8:
 # https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model/blob/d54c67aad513cb9daca444afa425cfb278e4fbf8/requirements.txt
 # DO NOT combine with spacellava.txt; GPU/inference are NOT smoke tested.
--r app.txt
--r orbital.txt
+# Standalone private HTTP service and shared store.
+# Image/data packages below also preserve the published IBM runtime dependencies.
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+sqlmodel>=0.0.24,<0.1
+SQLAlchemy>=2.0.14,<2.1
+pydantic>=2.9,<3
+pydantic-settings>=2.7,<3
+# 4.13 permits NumPy >=2.4 required by the pinned IBM runtime.
+opencv-python-headless>=4.12,<4.14
 
 # Official CUDA 13.0 wheels for the upstream Torch 2.12 / torchvision 0.27 line.
 torch @ https://download.pytorch.org/whl/cu130/torch-2.12.0%2Bcu130-cp311-cp311-win_amd64.whl ; sys_platform == "win32" and python_version == "3.11"

@@ -15,7 +15,7 @@ try:
     from fastapi.testclient import TestClient
     from sqlalchemy import inspect
     from api.main import create_app
-    from api.settings import Settings
+    from benchmark_services.common.settings import Settings
 except ImportError:
     TestClient = None
 
@@ -140,7 +140,7 @@ class ApiTests(unittest.TestCase):
                 "request_manifest_sha256": digest}]
             write_jsonl(folder / "predictions.jsonl", predictions)
             with patch("api.main.WORKSPACE_ROOT", workspace), \
-                 patch("api.settings.WORKSPACE_ROOT", workspace):
+                 patch("benchmark_services.common.settings.WORKSPACE_ROOT", workspace):
                 model = self.client.post("/model-configs", json={"name": "SpaceLLaVA",
                     "model_id": "fixture/SpaceLLaVA", "backend": "spacellava"}).json()
                 dataset = self.client.post("/dataset-configs", json={"name": "fixture", "planet": "moon",

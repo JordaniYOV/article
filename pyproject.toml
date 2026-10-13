@@ -23,7 +23,7 @@ planetary-vlm = "planetary_vlm.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["planetary_vlm*", "api*"]
+include = ["planetary_vlm*", "api*", "benchmark_services*"]
 namespaces = false
 
 [tool.setuptools.package-data]

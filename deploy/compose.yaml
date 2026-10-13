@@ -1,0 +1,82 @@
+name: planetary-benchmark
+
+x-environment: &environment
+  PLANETARY_WORKSPACE_ROOT: /workspace
+  PLANETARY_API_DATABASE_PATH: /workspace/.state/planetary.sqlite3
+  PLANETARY_API_SERVICE_TOKEN: ${PLANETARY_API_SERVICE_TOKEN:?Generate a shared service token in the root .env}
+
+x-volumes: &volumes
+  - state:/workspace/.state
+  - outputs:/workspace/outputs
+  - type: bind
+    source: ../data_orbital
+    target: /workspace/data_orbital
+    bind:
+      create_host_path: false
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8001/health',headers={'Authorization':'Bearer '+os.environ['PLANETARY_API_SERVICE_TOKEN']}); urllib.request.urlopen(r,timeout=2).close()"]
+  interval: 5s
+  timeout: 3s
+  retries: 10
+  start_period: 10s
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    platform: linux/amd64
+    environment:
+      <<: *environment
+      PLANETARY_API_DISPATCHER_ENABLED: "true"
+      PLANETARY_API_SPACELLAVA_SERVICE_URL: http://spacellava:8001
+      PLANETARY_API_IBM_SERVICE_URL: http://ibm:8001
+    ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - state:/workspace/.state
+      - outputs:/workspace/outputs
+      - type: bind
+        source: ../data_orbital
+        target: /workspace/data_orbital
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../configs
+        target: /workspace/configs
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      spacellava: {condition: service_healthy}
+      ibm: {condition: service_healthy}
+
+  spacellava:
+    build:
+      context: ..
+      dockerfile: deploy/model.Dockerfile
+      args: {SERVICE: spacellava, PROFILE: mock}
+    platform: linux/amd64
+    environment:
+      <<: *environment
+      PLANETARY_API_SERVICE_MOCK: "true"
+    volumes: *volumes
+    healthcheck: *healthcheck
+    stop_grace_period: 15s
+
+  ibm:
+    build:
+      context: ..
+      dockerfile: deploy/model.Dockerfile
+      args: {SERVICE: ibm, PROFILE: mock}
+    platform: linux/amd64
+    environment:
+      <<: *environment
+      PLANETARY_API_SERVICE_MOCK: "true"
+    volumes: *volumes
+    healthcheck: *healthcheck
+    stop_grace_period: 15s
+
+volumes:
+  state:
+  outputs:

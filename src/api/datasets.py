@@ -21,26 +21,9 @@ from sqlmodel import select
 
 from planetary_vlm.network import certificate_error, create_ssl_context
 
-from . import settings as paths
-from .models import DatasetConfig, DatasetConfigCreate
-
-
-def digest(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
-        allow_nan=False, default=str).encode()).hexdigest()
-
-
-def file_hash(path):
-    from planetary_vlm.inference.runner import file_hash as implementation
-    return implementation(Path(path))
-
-
-def safe_path(value, root):
-    root = Path(root).resolve()
-    result = (root / value).resolve()
-    if not result.is_relative_to(root) or "data_rover" in {part.lower() for part in result.parts}:
-        raise ValueError("Path leaves its permitted directory")
-    return result
+from benchmark_services.common import settings as paths
+from benchmark_services.common.store import DatasetConfig, DatasetConfigCreate
+from benchmark_services.common.files import digest, file_hash, safe_path
 
 
 def read_rows(manifest):

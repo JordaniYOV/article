@@ -1,3 +1,0 @@
-# Verified local core environment, 2026-09-26. Model stacks have separate versions.
-Pillow==12.3.0
-numpy==2.5.3

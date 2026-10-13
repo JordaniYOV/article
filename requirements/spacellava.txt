@@ -2,8 +2,16 @@
 # Windows x64, CPython 3.11/3.12. GPU/load/generation are NOT smoke tested.
 # Do not pip-install external/LLaVA with dependencies: its Torch 2.1.2 pins
 # predate Blackwell. The adapter imports the checked local repo directly.
--r app.txt
--r orbital.txt
+# Standalone private HTTP service, shared store and image handling.
+# Orbital restoration packages belong to the API environment, not this worker.
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+sqlmodel>=0.0.24,<0.1
+SQLAlchemy>=2.0.14,<2.1
+pydantic>=2.9,<3
+pydantic-settings>=2.7,<3
+Pillow>=10,<13
+opencv-python-headless>=4.12,<4.14
 
 # Official CUDA 12.8 wheels; explicit URLs avoid changing the index for other packages.
 torch @ https://download.pytorch.org/whl/cu128/torch-2.8.0%2Bcu128-cp311-cp311-win_amd64.whl ; sys_platform == "win32" and python_version == "3.11"

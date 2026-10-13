@@ -2,7 +2,7 @@
 
 Интерфейс оценки одной модели за запуск: подключение датасетов, конфигурации
 SpaceLLaVA и NASA–IBM, искажения и их комбинации, очередь, ответы, карты и метрики.
-React + TypeScript + Vite, графики Recharts. Отдельный FastAPI worker выполняет
+React + TypeScript + Vite, графики Recharts. Изолированные model services выполняют
 обработку; браузер получает состояние через API каждые 3 секунды.
 
 ## Запуск
@@ -16,18 +16,25 @@ npm.cmd run dev
 ```
 
 Открыть [http://127.0.0.1:5173](http://127.0.0.1:5173).
-В двух других терминалах, из корня проекта:
+В трёх других терминалах, из корня проекта. Сначала настройте общий токен,
+dispatcher и mock/real режим по [инструкции сервисов](../deploy/README.md).
+Для CPU mock можно использовать один лёгкий venv; для реальных моделей
+у каждого model service должен быть свой интерпретатор.
 
 ```powershell
-& .\.venv-benchmark\Scripts\python.exe -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src api.main:app --host 127.0.0.1 --port 8000
 ```
 
 ```powershell
-& .\.venv-benchmark\Scripts\python.exe -m api.worker
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src benchmark_services.spacellava.app:app --host 127.0.0.1 --port 8001
+```
+
+```powershell
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src benchmark_services.ibm.app:app --host 127.0.0.1 --port 8002
 ```
 
 Установка Python-зависимостей описана в [инструкции API](../src/api/README.md).
-Без worker задания остаются в очереди. Запуск сайта не скачивает веса.
+Без model services задания остаются в ожидании сервиса. Запуск сайта не скачивает веса.
 Реальные модели требуют локальных весов, зависимостей и отдельного smoke test.
 
 ## Настройка адресов

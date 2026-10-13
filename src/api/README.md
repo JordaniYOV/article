@@ -1,51 +1,43 @@
 # API оценки моделей
 
 Один запуск — одна модель, один датасет, фиксированная выборка снимков и выбранные
-цепочки искажений. Отдельный worker получает ответы последовательно. API возвращает
+цепочки искажений. Два изолированных сервиса получают ответы последовательно. API возвращает
 прогресс, результаты и JSON отчёта с таблицами и данными для графиков будущего сайта.
 
-## Запуск из корня проекта
+## Запуск сервисов
 
-`requirements/app.txt` устанавливает только API и обработку изображений.
-Для полной SpaceLLaVA используй корневой `requirements.txt`; для NASA–IBM —
-`requirements/ibm-imp.txt` в отдельном окружении. Порядок установки, проверки
-импортов и Windows DLL prerequisites: [requirements/README.md](../../requirements/README.md).
-Эти профили ещё не прошли GPU smoke test. Команды скачивания весов не являются
-строками requirements и выполняются отдельно, только по явному запросу.
+API больше не загружает модели и не запускает старый `api.worker`.
+Работают три HTTP процесса: API на 8000, SpaceLLaVA на 8001 и IBM на 8002.
+API-диспетчер выбирает конкретное задание; каждый сервис запускает его своим
+Python в отдельном дочернем процессе. SQLite и рабочая директория общие,
+модели выполняются последовательно под общей блокировкой GPU.
 
-```powershell
-& .\.venv-benchmark\Scripts\python.exe -m pip install -r requirements/app.txt
-& .\.venv-benchmark\Scripts\python.exe -m pip install --no-deps -e .
-& .\.venv-benchmark\Scripts\python.exe -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
-```
+Полная инструкция для Windows, CPU mock-проверки, отдельных окружений и
+подготовленного Docker Compose: [deploy/README.md](../../deploy/README.md).
+API устанавливается через `requirements/api.txt`, модели отдельно через
+`requirements/spacellava.txt` и `requirements/ibm-imp.txt`.
+В каждом окружении установите текущий проект: `python -m pip install --no-deps -e .`.
 
-В другом терминале:
-
-```powershell
-& .\.venv-benchmark\Scripts\python.exe -m api.worker
-```
-
-Запуск файлом из IDE или терминала также поддерживается:
+В корневом `.env` задайте один `PLANETARY_API_SERVICE_TOKEN` для всех сервисов,
+`PLANETARY_API_DISPATCHER_ENABLED=true` и для CPU проверки
+`PLANETARY_API_SERVICE_MOCK=true`. Веса/зависимости GPU не загружаются автоматически.
+Отсутствующий токен блокирует приватные endpoints сервиса; wrong backend/hash
+не запускают процесс. `GET /services` показывает доступность сервисов и режим mock.
 
 ```powershell
-& .\.venv-benchmark\Scripts\python.exe src/api/worker.py
+# Каждый процесс в отдельном терминале; для CPU mock можно один лёгкий venv.
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src api.main:app --host 127.0.0.1 --port 8000
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src benchmark_services.spacellava.app:app --host 127.0.0.1 --port 8001
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src benchmark_services.ibm.app:app --host 127.0.0.1 --port 8002
 ```
 
-Он подключает соседний пакет `planetary_vlm` из текущего `src/` и сохраняет
-правильный контекст относительных импортов. Для API и worker выбирайте один
-Python-интерпретатор: наличие файлов в IDE не устанавливает пакет в окружение.
-Если команда `python -m api.worker` сообщает `No module named api` или
-`No module named planetary_vlm`, из корня проекта установите пакет именно
-этим интерпретатором: `python -m pip install --no-deps -e .`.
-Проверка импортов без чтения очереди и запуска моделей:
-`python -m api.worker --help`.
-
-`python -m api.worker --once` обрабатывает одно задание. Без worker задания остаются
-queued. Swagger: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
-API стартует без весов и GPU. Веса и зависимости моделей устанавливаются отдельно;
-совместимость RTX 5070 Ti с реальными моделями до smoke test не подтверждена.
-Поддержаны SpaceLLaVA (`spacellava`), IBM IMP head (`ibm_imp`) и явно тестовый VLM `mock`.
-Для новой архитектуры нужен адаптер: одного checkpoint ID недостаточно.
+Для реальных моделей замените Python в двух последних командах на интерпретаторы
+их окружений; API остаётся в `.venv-api`. Model services не запускайте с
+`--reload` или несколькими uvicorn workers. Проверка worker entrypoint без очереди:
+`python src/benchmark_services/spacellava/worker.py --help` и аналогично `ibm/worker.py`.
+GPU/16 GB совместимость всё ещё требует отдельного smoke test.
+Synthetic `service_mock` сохраняется в SQLite, run.json, результатах и отчётах:
+это не научные результаты даже при backend `spacellava`/`ibm_imp`.
 
 ## Таблицы и сохранение
 
@@ -58,7 +50,7 @@ API стартует без весов и GPU. Веса и зависимост�
 | metric_analyses | Метрики, версия метода, IDs/hash результатов, признак mock |
 
 SQLite: `.state/planetary.sqlite3`. ZIP-датасеты: `data_orbital/uploads/<id>/`.
-Подготовленные входы: `data_orbital/inference/api/<run_id>/images/`.
+Подготовленные входы: `data_orbital/inference/api/<protocol_sha256>/images/`.
 Результаты: `outputs/<название модели>/<run_id>/`:
 
 - run.json — конфигурация и версии библиотек;
@@ -105,8 +97,8 @@ SHA-256 подготовленных PNG. Преобразование сохр�
 содержащий их исходный shard. Полный набор, train и веса моделей не загружаются.
 Готовые локальные файлы не перезаписываются; повреждённые хеши дают ошибку.
 
-Для сетевого восстановления установите `requirements/orbital.txt` в окружение
-API. Каталог и подключение уже существующих файлов не требуют pyarrow/h5py.
+Зависимости сетевого восстановления уже входят в `requirements/api.txt`.
+Каталог и подключение уже существующих файлов не требуют pyarrow/h5py.
 
 Если загрузка падает с `CERTIFICATE_VERIFY_FAILED: unable to get local issuer
 certificate`, обновите корневые сертификаты в том же окружении, где работает API:
@@ -245,7 +237,7 @@ HTTP 202 возвращает run_id, status/results/report URLs и прогре
 Статусы: queued → running → completed; также cancelled, interrupted, blocked, failed.
 Phase показывает подготовку, загрузку, inference. Одновременно работает одна модель.
 Остановка сохраняет текущий GPU-ответ, затем прекращает обработку. После падения
-worker при новом старте running становится interrupted; требуется resume.
+Диспетчер после освобождения GPU lock переводит оставшиеся running в interrupted; требуется resume.
 Продолжение отклоняется при изменении inputs/config/model provenance.
 Ошибка загрузки весов/библиотек даёт blocked с объяснением; веса не скачиваются.
 Ошибочные ответы сохраняются и не повторяются при resume: нужен новый запуск.

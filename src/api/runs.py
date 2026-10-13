@@ -6,10 +6,12 @@ from fastapi import HTTPException
 from sqlmodel import select
 from sqlalchemy import update as sql_update
 
-from . import settings as paths
-from .datasets import digest, file_hash, sample_rows, safe_path
-from .models import DatasetConfig, ModelConfig, Run, utc_now
-from .transforms import variants
+from benchmark_services.common import settings as paths
+from .datasets import sample_rows
+from benchmark_services.common.files import digest, file_hash, safe_path
+from benchmark_services.common.store import DatasetConfig, ModelConfig, Run, utc_now
+from benchmark_services.common.transforms import variants
+from benchmark_services.common.preparation import renderer_provenance
 
 KINDS = {"vlm": {"spacellava", "mock"}, "vit": {"ibm_imp"}}
 TERMINAL = {"completed", "cancelled", "interrupted", "blocked", "failed"}
@@ -46,7 +48,7 @@ def create_run(payload, kind, session):
             raise ValueError(f"Only {len(sources)} eligible images in this split")
         selected = sources[:payload.image_count]
         protocol = payload.model_dump(exclude={"model_name", "model_version", "dataset_id", "reuse_run_id"})
-        protocol.update({"version": "orbital-api-v1", "dataset_config_sha256": dataset.config_sha256,
+        protocol.update({"version": "orbital-services-v2", "renderer": renderer_provenance(), "dataset_config_sha256": dataset.config_sha256,
             "manifest_sha256": file_hash(dataset.manifest_path), "task_id": dataset.task_id,
             "planet": dataset.planet, "preprocessing": dataset.preprocessing,
             "max_new_tokens": model.max_new_tokens})
@@ -66,7 +68,7 @@ def create_run(payload, kind, session):
                 or dataset.preprocessing.get("input_protocol") != expected
                 or model.options.get("input_protocol") != expected):
                 raise ValueError("IBM IMP head requires the declared lunar IMP PNG input protocol")
-            from planetary_vlm.models.ibm_imp import restore_imp_png
+            from benchmark_services.common.segmentation import restore_imp_png
             for row in selected:
                 restore_imp_png(row["image"])
         run_id = uuid4().hex

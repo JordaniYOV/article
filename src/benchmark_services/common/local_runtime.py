@@ -1,4 +1,4 @@
-"""Local runtime checks shared by the two complete-system adapters."""
+"""Offline runtime checks shared by the isolated model adapters."""
 
 from contextlib import contextmanager
 import gc
