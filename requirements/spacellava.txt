@@ -1,0 +1,34 @@
+# Candidate full-system runtime for native LLaVA at c121f0432da27facab705978f83c4ada465e46fd.
+# Windows x64, CPython 3.11/3.12. GPU/load/generation are NOT smoke tested.
+# Do not pip-install external/LLaVA with dependencies: its Torch 2.1.2 pins
+# predate Blackwell. The adapter imports the checked local repo directly.
+-r app.txt
+-r orbital.txt
+
+# Official CUDA 12.8 wheels; explicit URLs avoid changing the index for other packages.
+torch @ https://download.pytorch.org/whl/cu128/torch-2.8.0%2Bcu128-cp311-cp311-win_amd64.whl ; sys_platform == "win32" and python_version == "3.11"
+torch @ https://download.pytorch.org/whl/cu128/torch-2.8.0%2Bcu128-cp312-cp312-win_amd64.whl ; sys_platform == "win32" and python_version == "3.12"
+torchvision @ https://download.pytorch.org/whl/cu128/torchvision-0.23.0%2Bcu128-cp311-cp311-win_amd64.whl ; sys_platform == "win32" and python_version == "3.11"
+torchvision @ https://download.pytorch.org/whl/cu128/torchvision-0.23.0%2Bcu128-cp312-cp312-win_amd64.whl ; sys_platform == "win32" and python_version == "3.12"
+torch==2.8.0
+torchvision==0.23.0
+
+# Native LLaVA's forward/generation API is tied to this older Transformers line.
+# The generic Qwen adapter's hf extra (>=4.49) is a different environment.
+transformers==4.37.2
+tokenizers==0.15.2
+huggingface-hub[cli]==0.34.4
+accelerate==0.27.2
+peft==0.9.0
+bitsandbytes==0.48.2
+sentencepiece>=0.2,<0.3
+protobuf>=4.25,<6
+safetensors>=0.4.3,<1
+einops==0.6.1
+einops-exts==0.0.4
+timm==0.6.13
+shortuuid>=1,<2
+requests>=2.32,<3
+PyYAML>=6,<7
+# Keep this profile on the existing API/transform CPU-pilot NumPy line.
+numpy==2.2.6

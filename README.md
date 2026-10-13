@@ -62,6 +62,12 @@ rover-view кадров.
 
 ## Установка
 
+Для API, orbital I/O и полной SpaceLLaVA добавлен корневой `requirements.txt`.
+NASA–IBM использует отдельный профиль `requirements/ibm-imp.txt` и отдельное
+окружение: версии библиотек конфликтуют. Команды и ограничения описаны в
+[`requirements/README.md`](requirements/README.md). GPU-профили пока не прошли
+smoke test; requirements не устанавливает Windows C++ runtime, драйвер или веса.
+
 Создано отдельное рабочее окружение `.venv-benchmark` (Python 3.12). В нём
 проект установлен editable с Pillow/NumPy. Старое `.venv` остаётся неисправным.
 

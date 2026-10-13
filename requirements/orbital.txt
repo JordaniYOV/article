@@ -1,8 +1,10 @@
-numpy==2.2.6
-certifi
-Pillow==12.3.0
-pyarrow==25.0.1
-h5py==3.16.0
-hdf5plugin==7.1.0
-tifffile==2026.9.20
-imagecodecs==2026.8.16
+# Orbital data acquisition/restoration. Model profiles constrain these ranges.
+# This is an installation specification, not a tested environment lockfile.
+numpy>=1.26,<3
+certifi>=2024.2.2
+Pillow>=10,<13
+pyarrow>=24,<26
+h5py>=3.16,<4
+hdf5plugin>=6,<8
+tifffile>=2026.9.20
+imagecodecs>=2026.8.16

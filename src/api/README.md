@@ -6,6 +6,13 @@
 
 ## Запуск из корня проекта
 
+`requirements/app.txt` устанавливает только API и обработку изображений.
+Для полной SpaceLLaVA используй корневой `requirements.txt`; для NASA–IBM —
+`requirements/ibm-imp.txt` в отдельном окружении. Порядок установки, проверки
+импортов и Windows DLL prerequisites: [requirements/README.md](../../requirements/README.md).
+Эти профили ещё не прошли GPU smoke test. Команды скачивания весов не являются
+строками requirements и выполняются отдельно, только по явному запросу.
+
 ```powershell
 & .\.venv-benchmark\Scripts\python.exe -m pip install -r requirements/app.txt
 & .\.venv-benchmark\Scripts\python.exe -m pip install --no-deps -e .

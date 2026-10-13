@@ -1,0 +1,5 @@
+# Default: API + orbital data + full SpaceLLaVA inference.
+# Windows x64, Python 3.11/3.12. NOT a GPU-tested lockfile.
+# NASA-IBM uses a separate environment: requirements/ibm-imp.txt.
+# Install the project itself separately: python -m pip install --no-deps -e .
+-r requirements/spacellava.txt
