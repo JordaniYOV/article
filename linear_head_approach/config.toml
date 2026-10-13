@@ -1,5 +1,6 @@
 schema_version = "encoder-probe-v1"
 status = "native_inputs_verified_feature_extraction_blocked"
+comparison_role = "optional_supporting_encoder_probe"
 task = "lunar_wac_catalog_crater_polygon_segmentation"
 source_dataset = "nasa-ibm-ai4science/Sombench-WAC-Crater-Detection"
 source_revision = "20f800becb64a0c7ad314652a683f97f0281fe67"

@@ -3,9 +3,11 @@
 Status: input preparation and admission audit, 30 September 2026. All 120
 selected native WAC rasters have passed the recorded source SHA-256 checks.
 All 120 decoded TIFFs have shape 512×512×5 on the preparation host.
-No encoder weights have been loaded and no head has been trained. This protocol supersedes the
-complete-system comparison as the **proposed primary research design**. The
-complete-system comparison remains a separate secondary analysis.
+No encoder weights have been loaded and no head has been trained. As of the
+12 October 2026 revision of `research_plan.md`, this is an **optional supporting
+experiment**, not the primary research design. The complete-system benchmark
+is primary. Prepared assets and this probe contract are retained; running or
+training the probe requires a separate task.
 
 ## Research claim
 

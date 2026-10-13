@@ -1,14 +1,16 @@
 schema_version = "orbital-study-v1"
 status = "data_collected_orbital_experiments_designed_admission_pending"
-date = "2026-09-30"
+date = "2026-10-12"
 data_root = "data_orbital"
 legacy_rover_data_root = "data_rover"
-# This flag applies to the secondary complete-system study in this file.
+# Primary complete-system study; optional probe training needs a separate task.
 no_training = true
-primary_proposed_design = "frozen_visual_encoder_probe"
-primary_proposed_config = "linear_head_approach/config.toml"
-primary_proposed_protocol = "linear_head_approach/protocol.md"
-complete_system_comparison_role = "secondary"
+primary_proposed_design = "ready_made_complete_system_benchmark"
+primary_proposed_config = "configs/orbital_study.toml"
+primary_proposed_protocol = "docs/protocols/orbital_study.md"
+complete_system_comparison_role = "primary"
+optional_encoder_probe_config = "linear_head_approach/config.toml"
+optional_encoder_probe_protocol = "linear_head_approach/protocol.md"
 model_visible_inputs_exclude = ["mask", "annotations", "answers", "outcome_telemetry"]
 
 [datasets.curated_orbital_v3]
@@ -99,21 +101,55 @@ label_type = "coco_polygons_rasterized"
 
 [questions]
 protocol = "docs/protocols/orbital_study.md"
-primary_pair_candidate = "crater_lunar_location_v1"
+primary_pair_candidate = "crater_largest_location_v1"
+common_crater_candidates = ["crater_presence_v1", "crater_center_v1", "crater_largest_location_v1", "crater_half_count_v1"]
 secondary_pair_candidate = "imp_moon_center_v1"
 mars_candidates = ["crater_mars_center_v1", "cone_mars_center_v1", "boulder_mars_center_v1"]
-terrain_candidates = ["low_slope_sector_v1", "route_choice_v1", "route_grid_v1"]
+terrain_candidates = ["height_pair_v1", "height_lowest_v1", "route_choice_v1", "route_grid_v1"]
 rule_status = "templates_defined_thresholds_and_admission_not_frozen"
 
 [admission]
-common_task = "lunar_crater_location_candidate_not_frozen"
+common_task = "shared_crater_question_contract_admission_pending"
 task_matched_output_adapters = "not_implemented"
 space_llava_checkpoint = "published_not_downloaded"
 ibm_mars_support = "unverified"
 grouped_split_audit = "partial"
 model_smoke_tests = "not_run"
-moon_imp_pairing = "exploratory_only_ten_positive_test_tiles"
+moon_imp_pairing = "exploratory_selected_eight_positive_test_tiles"
 moon_nac_pairing = "pending_label_completeness_output_rule_and_408_vs_766_dataset_version_training_overlap_audit"
 mars_pairing = "pending_ibm_input_compatibility_and_task_head"
-route_truth = "missing_coregistered_dem_or_dtm_and_rover_cost_model"
+route_truth = "height_arrays_available_metric_scale_alignment_cost_model_and_output_admission_pending"
 rock_truth = "mars_boulder_test_masks_acquired_n4_small_sample"
+
+[corruptions]
+status = "planned_not_generated_exact_methods_and_strengths_pending_dev"
+variants_per_image = 5
+candidate_families = ["blur", "noise", "brightness", "contrast", "occlusion"]
+combine_families = false
+freeze_rules_on = "val"
+preserve_source_groups_and_splits = true
+reference_height_is_not_corrupted = true
+
+[evaluation_volume]
+semantic_original_pool = 100
+height_original_pool = 100
+train_excluded_from_primary = 100
+variants_per_original_including_clean = 6
+maximum_input_variants_if_all_admitted = 1200
+volume_is_planned_upper_bound = true
+pool_includes_dev = true
+route_subset = "limited_after_admission"
+
+[routing]
+status = "proposed_not_implemented_or_admitted"
+grid_rows = 8
+grid_columns = 8
+neighbours = 4
+reference_solver = "dijkstra_or_astar"
+endpoint_policy = "seeded_separated_cell_centres_independent_of_reference_route"
+candidate_policy = "answer_independent_frozen_on_dev"
+primary_input_regime = "image_only_reference_height_hidden"
+optional_input_regime = "supplied_terrain_separate_control"
+cost_model = "pending_dev_definition_units_and_constraints"
+accept_multiple_optimal_paths = true
+physical_safety_claim = false
