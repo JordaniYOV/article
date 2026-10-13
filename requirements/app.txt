@@ -9,3 +9,7 @@ python-multipart>=0.0.20,<1
 Pillow>=10
 numpy>=1.26,<2.3
 opencv-python-headless>=4.12,<4.13
+
+.\.venv-benchmark\Scripts\hf.exe download remyxai/SpaceLLaVA --revision 5a69f71bda9dea3e4d8113c1047c07fd3da483f8 --local-dir weights/SpaceLLaVA --include "*.safetensors" "*.json" "*.model" "*.txt"
+
+.\.venv-benchmark\Scripts\hf.exe download openai/clip-vit-large-patch14-336 config.json preprocessor_config.json pytorch_model.bin --revision ce19dc912ca5cd21c8a653c79e251e808ccabcd1 --local-dir weights/clip-vit-large-patch14-336
