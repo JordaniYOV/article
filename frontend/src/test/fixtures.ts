@@ -7,7 +7,7 @@ export const dataset: Dataset = { id: 3, name: 'Лунная выборка', ve
   manifest_path: 'data_orbital/fixture/manifest.jsonl', requests_path: null, targets_path: null,
   splits: ['val', 'test'], conditions: ['clean'], preprocessing: {}, provenance: {}, config_sha256: 'dataset-hash' };
 export const run: Run = { id: 'fixture-run', run_id: 'fixture-run', model_config_id: 7, dataset_config_id: 3,
-  kind: 'vlm', status: 'completed', phase: 'finished', total: 60, completed: 60, error_message: null,
+  kind: 'vlm', status: 'completed', phase: 'finished', total: 60, completed: 60, error_message: null, cancel_requested: false,
   protocol: initialProtocol, protocol_sha256: 'matching-protocol', created_at: '2026-10-02T12:00:00Z',
   updated_at: '2026-10-02T12:00:00Z', output_dir: 'outputs/SpaceLLaVA/fixture-run', progress: { completed: 60, total: 60, percent: 100 } };
 export const condition: Condition = { runtime: { n_expected: 10, n_responses: 10, n_ok: 10, n_error: 0,

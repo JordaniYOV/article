@@ -175,6 +175,66 @@ class RunApiTests(unittest.TestCase):
         self.assertFalse(run_once(self.settings))
         self.assertEqual(self.client.get(run["status_url"]).json()["status"], "interrupted")
 
+    def test_cancel_waiting_service_is_idempotent_without_loading_model(self):
+        dataset = self.dataset()
+        self.model()
+        run, _ = self.start(dataset, distortions=[])
+        with Session(self.app.state.engine) as session:
+            saved = session.get(Run, run["id"])
+            saved.phase = "waiting_service"
+            session.add(saved)
+            session.commit()
+        for _ in range(2):
+            response = self.client.post(f"/runs/{run['id']}/cancel")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["status"], "cancelled")
+            self.assertEqual(response.json()["phase"], "stopped")
+            self.assertTrue(response.json()["cancel_requested"])
+        with patch("benchmark_services.common.execution.create_adapter", side_effect=AssertionError("must not load")):
+            self.assertFalse(run_once(self.settings))
+        self.assertEqual(self.client.get(run["results_url"]).json(), [])
+        self.assertEqual(self.client.post("/runs/not-found/cancel").status_code, 404)
+
+    def test_cancel_when_worker_claims_after_api_read_still_requests_stop(self):
+        dataset = self.dataset()
+        self.model()
+        run, _ = self.start(dataset, distortions=[])
+        from api.runs import find_run
+        def claim_after_read(session, run_id):
+            stale = find_run(session, run_id)
+            with Session(self.app.state.engine) as worker_session:
+                current = worker_session.get(Run, run_id)
+                current.status, current.phase = "running", "loading"
+                worker_session.add(current)
+                worker_session.commit()
+            return stale
+        with patch("api.runs.find_run", side_effect=claim_after_read):
+            response = self.client.post(f"/runs/{run['id']}/cancel")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "running")
+        self.assertEqual(response.json()["phase"], "cancelling")
+        self.assertTrue(response.json()["cancel_requested"])
+
+    def test_cancel_cannot_overwrite_completion_after_api_read(self):
+        dataset = self.dataset()
+        self.model()
+        run, _ = self.start(dataset, distortions=[])
+        from api.runs import find_run
+        def finish_after_read(session, run_id):
+            stale = find_run(session, run_id)
+            with Session(self.app.state.engine) as worker_session:
+                current = worker_session.get(Run, run_id)
+                current.status, current.phase = "completed", "finished"
+                worker_session.add(current)
+                worker_session.commit()
+            return stale
+        with patch("api.runs.find_run", side_effect=finish_after_read):
+            response = self.client.post(f"/runs/{run['id']}/cancel")
+        self.assertEqual(response.status_code, 409, response.text)
+        saved = self.client.get(run["status_url"]).json()
+        self.assertEqual(saved["status"], "completed")
+        self.assertFalse(saved["cancel_requested"])
+
     def test_resume_refuses_changed_inputs_and_gpu_lock_is_exclusive(self):
         dataset = self.dataset()
         self.model()

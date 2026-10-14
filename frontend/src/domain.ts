@@ -21,7 +21,7 @@ export const STATUS: Record<string, string> = {
 };
 export const PHASE: Record<string, string> = { waiting: 'Ожидание обработчика', preparing: 'Подготовка снимков',
   waiting_service: 'Ожидание сервиса модели', starting_service: 'Запуск процесса модели',
-  loading: 'Загрузка модели', inference: 'Получение ответов', cancelling: 'Остановка после текущего снимка', finished: 'Готово', stopped: 'Обработка остановлена' };
+  loading: 'Загрузка модели', inference: 'Получение ответов', cancelling: 'Остановка после текущей операции', finished: 'Готово', stopped: 'Обработка остановлена' };
 export const shortModel = (name: string) => name === 'NASA-IBM-Lunar-Foundation-Model' ? 'NASA–IBM Lunar FM' : name;
 export const conditionLabel = (key: string) => key === 'clean' ? 'Оригинал' :
   key.split('+').map((effect) => EFFECTS.find((item) => item.id === effect)?.label || effect).join(' + ');

@@ -10,6 +10,7 @@ sqlmodel>=0.0.24,<0.1
 SQLAlchemy>=2.0.14,<2.1
 pydantic>=2.9,<3
 pydantic-settings>=2.7,<3
+structlog>=25.1,<27
 Pillow>=10,<13
 opencv-python-headless>=4.12,<4.14
 

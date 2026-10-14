@@ -94,7 +94,7 @@ class RequirementsTests(unittest.TestCase):
 
     def test_each_service_contains_shared_pipeline_dependencies(self):
         expected = {"fastapi", "uvicorn", "sqlmodel", "sqlalchemy", "pydantic",
-                    "pydantic-settings", "pillow", "numpy", "opencv-python-headless"}
+                    "pydantic-settings", "pillow", "numpy", "opencv-python-headless", "structlog"}
         for profile in ("api", "spacellava", "ibm-imp"):
             with self.subTest(profile=profile):
                 names = {r.name.lower() for r in self.requirements(f"requirements/{profile}.txt")}

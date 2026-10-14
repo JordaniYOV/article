@@ -12,6 +12,10 @@ from benchmark_services.common.files import digest, file_hash, safe_path
 from benchmark_services.common.store import DatasetConfig, ModelConfig, Run, utc_now
 from benchmark_services.common.transforms import variants
 from benchmark_services.common.preparation import renderer_provenance
+from benchmark_services.common.execution import request_cancellation
+from .logging import get_logger
+
+LOGGER = get_logger("api.runs")
 
 KINDS = {"vlm": {"spacellava", "mock"}, "vit": {"ibm_imp"}}
 TERMINAL = {"completed", "cancelled", "interrupted", "blocked", "failed"}
@@ -85,6 +89,7 @@ def create_run(payload, kind, session):
         session.add(run)
         session.commit()
         session.refresh(run)
+        LOGGER.info("run_queued", run_id=run.id, backend=model.backend, status=run.status, total=run.total)
         return run
     except (ValueError, OSError, KeyError) as error:
         session.rollback()
@@ -96,19 +101,26 @@ def control_run(session, run_id, action):
     expected_status = run.status
     values = {"updated_at": utc_now()}
     if action == "cancel":
-        if run.status == "queued":
-            values.update(status="cancelled", phase="stopped", cancel_requested=True)
-        elif run.status == "running":
-            values.update(cancel_requested=True, phase="cancelling")
-        elif run.status != "cancelled":
+        # The worker may claim the run after find_run(). The shared atomic
+        # transition handles either current queued/running state, not that snapshot.
+        changed = request_cancellation(session, run_id)
+        session.refresh(run)
+        if not changed and run.status != "cancelled":
+            LOGGER.warning("run_cancel_rejected", run_id=run.id, status=run.status)
             raise HTTPException(409, "Run is not queued or running")
-    else:
+        LOGGER.info("run_cancel_requested" if changed else "run_cancel_already_applied",
+                    run_id=run.id, status=run.status, phase=run.phase)
+        return run
+    elif action == "resume":
         if run.status not in {"cancelled", "interrupted", "blocked", "failed"}:
             raise HTTPException(409, "Only a stopped or blocked run can be resumed")
         values.update(status="queued", phase="waiting", cancel_requested=False, error_message=None)
+    else:
+        raise HTTPException(422, "Unknown run action")
     changed = session.execute(sql_update(Run).where(Run.id == run_id, Run.status == expected_status).values(**values))
     session.commit()
     if changed.rowcount != 1:
         raise HTTPException(409, "Run status changed during this request; refresh its status")
     session.refresh(run)
+    LOGGER.info("run_resumed", run_id=run.id, status=run.status)
     return run

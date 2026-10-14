@@ -22,6 +22,11 @@ describe('FastAPI client', () => {
     expect(body).not.toHaveProperty('model_ids');
     expect(body).not.toHaveProperty('answer');
   });
+  it('cancels the selected queued task via its dedicated route without deleting results', async () => {
+    await api.control('queued-run', 'cancel');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/runs/queued-run/cancel');
+    expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'POST' });
+  });
   it('routes IBM to ViT and sends the source-run reference for matched selection', async () => {
     await api.start({ ...model, name: 'NASA-IBM-Lunar-Foundation-Model', backend: 'ibm_imp' }, 3, initialProtocol, 'old-run');
     expect(fetchMock.mock.calls[0][0]).toBe('/api/vit/runs');

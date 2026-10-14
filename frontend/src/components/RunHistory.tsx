@@ -1,4 +1,4 @@
-import { CirclePause, Clock3, Play, RotateCcw } from 'lucide-react';
+import { CirclePause, Clock3, Play, RotateCcw, X } from 'lucide-react';
 import { PHASE, shortModel, STATUS } from '../domain';
 import type { Model, Run } from '../types';
 import { Busy } from './ui';
@@ -14,11 +14,15 @@ export default function RunHistory({ runs, models, activeId, select, pending, co
           <span className={`run-icon ${run.status === 'running' ? 'processing' : ''}`}><Play size={16} /></span>
           <span className="run-title"><strong>{shortModel(models.find((item) => item.id === run.model_config_id)?.name || 'Модель')}<code>{run.id.slice(0, 8)}</code></strong>
             <small>{run.protocol.image_count} снимков · {PHASE[run.phase] || run.phase}</small></span>
-          <span className={`status-badge ${run.status}`}>{run.status === 'running' && <span className="tiny-dot" />}{STATUS[run.status] || run.status}</span>
+          <span className={`status-badge ${run.status}`}>{run.status === 'running' && <span className="tiny-dot" />}{run.status === 'running' && run.cancel_requested ? 'Останавливается' : STATUS[run.status] || run.status}</span>
           <span className="run-progress"><span>{run.completed} / {run.total}</span><span className="progress-track"><span style={{ width: `${Math.min(100, run.progress.percent)}%` }} /></span></span>
         </button>
-        {(run.status === 'queued' || run.status === 'running') && <button type="button" className="icon-button" disabled={!!pending || run.phase === 'cancelling'} onClick={() => control(run.id, 'cancel')} aria-label={`Остановить запуск ${run.id.slice(0, 8)}`}>
-          {pending === run.id ? <Busy /> : <CirclePause size={19} />}</button>}
+        {(run.status === 'queued' || run.status === 'running') && <button type="button" className="icon-button run-control"
+          disabled={!!pending || run.cancel_requested || run.phase === 'cancelling'} onClick={() => control(run.id, 'cancel')}
+          aria-label={`${run.status === 'queued' ? 'Убрать из очереди запуск' : 'Остановить запуск'} ${run.id.slice(0, 8)}`}
+          title={run.status === 'queued' ? 'Отменить задание до загрузки модели' : 'Остановить после текущей операции; сохранённые ответы останутся'}>
+          {pending === run.id || run.cancel_requested ? <Busy /> : run.status === 'queued' ? <X size={16} /> : <CirclePause size={16} />}
+          <span>{run.cancel_requested ? 'Останавливается…' : run.status === 'queued' ? 'Убрать из очереди' : 'Остановить'}</span></button>}
         {['cancelled', 'interrupted', 'blocked', 'failed'].includes(run.status) && <button type="button" className="icon-button" disabled={!!pending} onClick={() => control(run.id, 'resume')} aria-label={`Продолжить запуск ${run.id.slice(0, 8)}`}>
           {pending === run.id ? <Busy /> : <RotateCcw size={18} />}</button>}
       </div>)}</div>}

@@ -180,6 +180,7 @@ h2 { font-size: 17px; font-weight: 700; letter-spacing: -.026em; }
 .run-list { margin-top: 11px; max-height: 190px; overflow-y: auto; }
 .run-row { display: flex; align-items: center; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px; }
 .run-row.active { background: #fcfbff; border-color: #e9e2fa; }
+.run-control { width: auto; gap: 5px; padding: 0 7px; font-size: 10px; white-space: nowrap; }
 .run-select { display: flex; align-items: center; flex: 1; gap: 11px; border: 0; background: transparent; text-align: left; min-width: 0; padding: 9px 0; }
 .run-icon { width: 31px; height: 31px; display: grid; place-items: center; background: #f4f1fc; color: #a18cda; border-radius: 7px; }
 .run-icon.processing { background: #efebff; color: #8663ec; }
@@ -358,6 +359,8 @@ table, .table-model, .answer-content p { font-size: 12px; }
   .resource-list { max-height: 180px; }
   .history-heading > .field-note { display: none; }
   .run-select { flex-wrap: wrap; gap: 8px; }
+  .run-row { flex-wrap: wrap; }
+  .run-control { margin-left: 39px; margin-bottom: 5px; }
   .run-title { min-width: 145px; }
   .run-title strong { flex-wrap: wrap; gap: 4px; }
   .run-progress { width: 100%; margin: 0 2px 0 39px; }

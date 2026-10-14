@@ -29,6 +29,7 @@ export interface Run {
   id: string; run_id: string; model_config_id: number; dataset_config_id: number;
   kind: 'vlm' | 'vit'; status: string; phase: string; total: number; completed: number;
   error_message: string | null; protocol: Protocol; protocol_sha256: string;
+  cancel_requested: boolean;
   created_at: string; updated_at: string; output_dir: string;
   progress: { completed: number; total: number; percent: number };
 }

@@ -1,7 +1,6 @@
 """Dispatch queued runs to isolated HTTP model services; no model imports."""
 
 from threading import Event, Thread
-import logging
 
 from sqlalchemy import update as sql_update
 from sqlmodel import Session, select
@@ -12,8 +11,9 @@ from benchmark_services.common.protocol import service_for_backend
 from benchmark_services.common.preparation import prepare_bundle, PreparationCancelled
 from benchmark_services.common.store import ModelConfig, Run, utc_now
 from .service_client import ServiceClient, ServiceUnavailable, ServiceRejected
+from .logging import get_logger
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger("api.dispatcher")
 
 
 class Dispatcher:
@@ -65,6 +65,7 @@ class Dispatcher:
                 if info.get("gpu_busy") or info.get("active_run_id"):
                     return False
                 self._mark_queued(run.id, phase="preparing", error_message=None)
+                LOGGER.info("run_preparing", run_id=run.id, service=service)
 
                 def stopped():
                     if self.stop.is_set():
@@ -75,20 +76,25 @@ class Dispatcher:
 
                 prepare_bundle(run, stopped)
                 if stopped():
+                    LOGGER.info("run_dispatch_stopped", run_id=run.id, service=service)
                     return False
                 result = self.client.submit(service, run)
                 if result.get("status") == "queued":
                     self._mark_queued(run.id, phase="starting_service", error_message=None)
                 self.last_error = None
+                LOGGER.info("run_dispatched", run_id=run.id, service=service, status=result.get("status"))
                 return True
             except PreparationCancelled:
+                LOGGER.info("run_preparation_cancelled", run_id=run.id)
                 return False
             except (ValueError, OSError, KeyError) as error:
+                LOGGER.error("run_dispatch_blocked", run_id=run.id, error_type=type(error).__name__)
                 self._mark_queued(run.id, status="blocked", phase="stopped", error_message=str(error))
             except ServiceRejected as error:
                 if error.status == 409:  # Shared reservation lost to another submission.
                     return False
                 self.last_error = str(error)
+                LOGGER.warning("run_service_rejected", run_id=run.id, error_type=type(error).__name__)
                 self._mark_queued(run.id, status="blocked", phase="stopped", error_message=str(error))
             except ServiceUnavailable as error:
                 # Keep the job durable and allow the other model's queue to progress.
@@ -106,11 +112,12 @@ class Dispatcher:
                     self.tick()
                 except Exception as error:
                     self.last_error = f"{type(error).__name__}: {error}"
-                    LOGGER.exception("Dispatcher tick failed")
+                    LOGGER.error("dispatcher_tick_failed", error_type=type(error).__name__)
                 self.stop.wait(self.settings.worker_poll_seconds)
 
         self.thread = Thread(target=loop, name="model-dispatcher", daemon=True)
         self.thread.start()
+        LOGGER.info("dispatcher_started")
 
     def close(self):
         self.stop.set()
@@ -119,3 +126,4 @@ class Dispatcher:
             self.thread.join(timeout=2 * self.settings.service_http_timeout + self.settings.worker_poll_seconds + 1)
             if self.thread.is_alive():
                 raise RuntimeError("Dispatcher did not stop within its bounded shutdown window")
+            LOGGER.info("dispatcher_stopped")

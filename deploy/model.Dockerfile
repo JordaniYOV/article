@@ -23,6 +23,8 @@ COPY pyproject.toml ./
 COPY src/planetary_vlm/ src/planetary_vlm/
 COPY src/benchmark_services/__init__.py src/benchmark_services/__init__.py
 COPY src/benchmark_services/common/ src/benchmark_services/common/
+# Workers reuse only the lightweight logging module, not public API routes.
+COPY src/api/__init__.py src/api/logging.py src/api/
 # Each image contains only its own model package, never the other model or API routes.
 COPY src/benchmark_services/${SERVICE}/ src/benchmark_services/${SERVICE}/
 RUN python -m pip install --no-cache-dir --no-deps -e . && \

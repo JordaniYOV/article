@@ -380,7 +380,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def read_run(run_id: str, session: SessionDep):
         return run_view(find_run(session, run_id))
 
-    @application.post("/runs/{run_id}/cancel", tags=["runs"])
+    @application.post("/runs/{run_id}/cancel", tags=["runs"],
+        summary="Cancel a queued run or request a running worker to stop",
+        description="Queued jobs are cancelled atomically without loading a model. "
+                    "Running jobs stop cooperatively after the current operation. "
+                    "Saved responses are retained; repeated cancellation is safe.")
     def cancel_run(run_id: str, session: SessionDep):
         return run_view(control_run(session, run_id, "cancel"))
 

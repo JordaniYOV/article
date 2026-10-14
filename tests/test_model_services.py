@@ -1,6 +1,8 @@
 """CPU-only API -> service -> real job subprocess -> persisted fixture results."""
 
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 import subprocess
 import sys
@@ -25,7 +27,8 @@ try:
     from benchmark_services.common.store import Run
     from benchmark_services.common.files import file_hash
     from benchmark_services.common.files import atomic_json
-    from benchmark_services.common.execution import run_selected
+    from benchmark_services.common.execution import run_selected, request_cancellation, update, process_next, recover
+    from planetary_vlm.contracts import ModelResponse
     from benchmark_services.common.preparation import prepare_bundle
     from benchmark_services.common.locks import gpu_busy
 except ImportError:
@@ -151,6 +154,16 @@ class ModelServiceTests(unittest.TestCase):
             self.assertEqual(score.status_code, 200, score.text)
             self.assertTrue(score.json()["mock"])
             self.assertTrue(self.api.get(run["report_url"]).json()["mock"])
+            logs = [json.loads(line) for line in (Path(run["output_dir"]) / "service-worker.log")
+                .read_text(encoding="utf-8").splitlines() if line.strip()]
+            events = {line["event"] for line in logs}
+            self.assertTrue({"worker_started", "job_claimed", "execution_started", "request_completed",
+                "resource_cleanup_completed", "worker_exited"}.issubset(events), events)
+            for line in logs:
+                self.assertEqual(line["run_id"], run["id"])
+                self.assertNotIn("prompt", line)
+                self.assertNotIn("response", line)
+                self.assertNotIn("answer", line)
         for _, payload in self.transport.submissions:
             self.assertEqual(set(payload), {"run_id", "protocol_sha256"})
         # Different model environments must receive the very same prepared bytes.
@@ -313,6 +326,229 @@ class ModelServiceTests(unittest.TestCase):
         status = self.api.get(run["status_url"]).json()
         self.assertEqual(status["status"], "blocked")
         self.assertIn("Prepared image changed", status["error_message"])
+
+    def test_service_cancels_queued_job_before_submission_without_loading(self):
+        run = self.start()
+        status = self.transport.request("spacellava", "POST", f"/jobs/{run['id']}/cancel")
+        self.assertEqual((status["status"], status["phase"]), ("cancelled", "stopped"))
+        with patch("benchmark_services.common.execution.create_adapter") as create:
+            self.assertFalse(run_selected(self.settings, run["id"], ("spacellava",)))
+            create.assert_not_called()
+        with patch("benchmark_services.common.controller.subprocess.Popen") as spawn:
+            repeated = self.transport.request("spacellava", "POST", "/jobs",
+                {"run_id": run["id"], "protocol_sha256": run["protocol_sha256"]})
+            spawn.assert_not_called()
+        self.assertEqual(repeated["status"], "cancelled")
+
+    def test_worker_output_is_mirrored_to_console_and_preserved_in_file(self):
+        for service, model in (("spacellava", "SpaceLLaVA"), ("ibm", "IBM")):
+            with self.subTest(service=service):
+                run = self.start(model)
+                console = StringIO()
+                with redirect_stdout(console):
+                    self.submit(service, run)
+                    self.wait_job(service, run)
+                file_output = (Path(run["output_dir"]) / "service-worker.log").read_text(encoding="utf-8")
+                self.assertTrue(file_output)
+                events = [json.loads(line) for line in file_output.splitlines()]
+                console_events = [json.loads(line) for line in console.getvalue().splitlines()]
+                child_events = [event for event in console_events
+                    if event.get("component") in {"worker.cli", "worker.execution"}]
+                # The same console also receives controller events; every child
+                # event must appear exactly once, in its original file order.
+                self.assertEqual(child_events, events)
+                self.assertTrue(any(event["event"] == "worker_started" for event in events))
+                self.assertTrue(any(event["event"] == "worker_exited" for event in events))
+                self.assertIsNone(self.apps[service].state.controller.log_mirror)
+                self.assertFalse(gpu_busy())
+
+    def test_cancellation_during_last_response_finishes_stopped_and_keeps_result(self):
+        run = self.start()
+        engine = self.api_app.state.engine
+        with Session(engine) as session:
+            prepare_bundle(session.get(Run, run["id"]))
+
+        class CancellingAdapter:
+            closed = False
+            def predict(self, request):
+                with Session(engine) as session:
+                    self_was_cancelled = request_cancellation(session, run["id"])
+                if not self_was_cancelled:
+                    raise AssertionError("Running job must accept cancellation")
+                return ModelResponse(request.request_id, "YES", "ok", .01)
+            def close(self): self.closed = True
+
+        adapter = CancellingAdapter()
+        with patch("benchmark_services.common.execution.create_adapter", return_value=adapter):
+            self.assertTrue(run_selected(self.settings, run["id"], ("spacellava",), mock_mode=False))
+        status = self.api.get(run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("cancelled", "stopped"))
+        self.assertEqual(status["completed"], 1)
+        self.assertEqual(len(self.api.get(run["results_url"]).json()), 1)
+        self.assertTrue(adapter.closed)
+
+    def test_atomic_cancel_does_not_overwrite_a_terminal_concurrent_commit(self):
+        run = self.start()
+        with Session(self.api_app.state.engine) as stale:
+            stale_record = stale.get(Run, run["id"])
+            self.assertEqual(stale_record.status, "queued")
+            with Session(self.api_app.state.engine) as current:
+                record = current.get(Run, run["id"])
+                record.status, record.phase = "completed", "finished"
+                current.add(record)
+                current.commit()
+            self.assertFalse(request_cancellation(stale, run["id"]))
+            refreshed = stale.get(Run, run["id"])
+            self.assertEqual((refreshed.status, refreshed.phase), ("completed", "finished"))
+            self.assertFalse(refreshed.cancel_requested)
+
+    def test_flagged_queue_entry_cannot_be_claimed(self):
+        run = self.start()
+        with Session(self.api_app.state.engine) as session:
+            record = session.get(Run, run["id"])
+            record.cancel_requested = True
+            session.add(record)
+            session.commit()
+        with patch("benchmark_services.common.execution.execute") as execute:
+            self.assertFalse(run_selected(self.settings, run["id"], ("spacellava",), mock_mode=True))
+            self.assertFalse(process_next(self.api_app.state.engine))
+            execute.assert_not_called()
+
+    def test_progress_updates_do_not_hide_running_cancellation(self):
+        run = self.start()
+        engine = self.api_app.state.engine
+        update(engine, run["id"], status="running", phase="preparing")
+        with Session(engine) as session:
+            self.assertTrue(request_cancellation(session, run["id"]))
+        for phase in ("preparing", "loading", "inference"):
+            update(engine, run["id"], phase=phase)
+            status = self.api.get(run["status_url"]).json()
+            self.assertEqual((status["status"], status["phase"]), ("running", "cancelling"))
+
+    def test_initialization_failure_after_cancel_preserves_cancellation(self):
+        run = self.start()
+        engine = self.api_app.state.engine
+        with Session(engine) as session:
+            prepare_bundle(session.get(Run, run["id"]))
+
+        class FailingInitialization:
+            closed = False
+            def initialize(self):
+                with Session(engine) as session:
+                    request_cancellation(session, run["id"])
+                raise ValueError("fixture initialization failure")
+            def predict(self, request):
+                raise AssertionError("Cancelled initialization must not predict")
+            def close(self): self.closed = True
+
+        adapter = FailingInitialization()
+        with patch("benchmark_services.common.execution.create_adapter", return_value=adapter):
+            self.assertTrue(run_selected(self.settings, run["id"], ("spacellava",)))
+        status = self.api.get(run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("cancelled", "stopped"))
+        self.assertIsNone(status["error_message"])
+        self.assertTrue(adapter.closed)
+        self.assertEqual(self.api.get(run["results_url"]).json(), [])
+
+    def test_preparation_runtime_error_after_cancel_preserves_cancellation(self):
+        run = self.start()
+        engine = self.api_app.state.engine
+
+        def cancelled_preparation(_run):
+            with Session(engine) as session:
+                request_cancellation(session, run["id"])
+            raise ValueError("fixture bundle error after cancellation")
+
+        with patch("benchmark_services.common.execution.load_bundle", side_effect=cancelled_preparation), \
+                patch("benchmark_services.common.execution.create_adapter") as create:
+            self.assertTrue(run_selected(self.settings, run["id"], ("spacellava",)))
+            create.assert_not_called()
+        status = self.api.get(run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("cancelled", "stopped"))
+        self.assertIsNone(status["error_message"])
+
+    def test_failed_cleanup_stops_worker_and_marks_failed(self):
+        run = self.start()
+        engine = self.api_app.state.engine
+        with Session(engine) as session:
+            prepare_bundle(session.get(Run, run["id"]))
+
+        class FailingCleanup:
+            def predict(self, request): return ModelResponse(request.request_id, "YES", "ok", .01)
+            def close(self): raise RuntimeError("fixture cleanup failure")
+
+        with patch("benchmark_services.common.execution.create_adapter", return_value=FailingCleanup()):
+            with self.assertRaisesRegex(RuntimeError, "could not be released"):
+                run_selected(self.settings, run["id"], ("spacellava",))
+        status = self.api.get(run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("failed", "stopped"))
+        self.assertIn("Resource cleanup failed", status["error_message"])
+        self.assertEqual(status["completed"], 1)
+        self.assertFalse(gpu_busy())
+
+    def test_cleanup_failure_after_cancel_preserves_cancelled_but_stops_worker(self):
+        run = self.start()
+        engine = self.api_app.state.engine
+        with Session(engine) as session:
+            prepare_bundle(session.get(Run, run["id"]))
+
+        class FailingCleanup:
+            def predict(self, request):
+                with Session(engine) as session:
+                    request_cancellation(session, run["id"])
+                return ModelResponse(request.request_id, "YES", "ok", .01)
+            def close(self): raise RuntimeError("fixture cleanup failure")
+
+        with patch("benchmark_services.common.execution.create_adapter", return_value=FailingCleanup()):
+            with self.assertRaisesRegex(RuntimeError, "could not be released"):
+                run_selected(self.settings, run["id"], ("spacellava",))
+        status = self.api.get(run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("cancelled", "stopped"))
+        self.assertIsNone(status["error_message"])
+        self.assertEqual(status["completed"], 1)
+        self.assertFalse(gpu_busy())
+
+    def test_cleanup_failure_does_not_overwrite_resume_queued_during_close(self):
+        run = self.start()
+        engine, api = self.api_app.state.engine, self.api
+        with Session(engine) as session:
+            prepare_bundle(session.get(Run, run["id"]))
+
+        class ResumedCleanup:
+            def predict(self, request):
+                with Session(engine) as session:
+                    request_cancellation(session, run["id"])
+                return ModelResponse(request.request_id, "YES", "ok", .01)
+            def close(self):
+                response = api.post(f"/runs/{run['id']}/resume")
+                if response.status_code != 202:
+                    raise AssertionError("Fixture resume did not queue")
+                raise RuntimeError("fixture cleanup failure")
+
+        with patch("benchmark_services.common.execution.create_adapter", return_value=ResumedCleanup()):
+            with self.assertRaisesRegex(RuntimeError, "could not be released"):
+                run_selected(self.settings, run["id"], ("spacellava",))
+        status = self.api.get(run["status_url"]).json()
+        self.assertEqual(status["status"], "queued")
+        self.assertFalse(status["cancel_requested"])
+        self.assertIsNone(status["error_message"])
+        self.assertEqual(status["completed"], 1)
+        self.assertFalse(gpu_busy())
+
+    def test_recover_distinguishes_cancelled_and_interrupted_orphans(self):
+        cancelled_run, interrupted_run = self.start(), self.start("IBM")
+        engine = self.api_app.state.engine
+        for run in (cancelled_run, interrupted_run):
+            update(engine, run["id"], status="running", phase="loading")
+        with Session(engine) as session:
+            request_cancellation(session, cancelled_run["id"])
+        recover(engine)
+        status = self.api.get(cancelled_run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("cancelled", "stopped"))
+        self.assertIsNone(status["error_message"])
+        status = self.api.get(interrupted_run["status_url"]).json()
+        self.assertEqual((status["status"], status["phase"]), ("interrupted", "stopped"))
+        self.assertIn("resume to continue", status["error_message"])
 
 
 class ArchitectureTests(unittest.TestCase):

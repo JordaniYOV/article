@@ -36,6 +36,20 @@ imports and tests updated. Active historical CLI/converter modules remain
 because existing workflows/tests still use them. `data_rover/`, weights, source
 datasets and old results were not inspected, changed or cleaned.
 
+`src/api/logging.py` is a lightweight, standalone structlog module shared by the
+dispatcher and model workers. Model images copy only that module and API's empty
+package initializer, **not** the public HTTP routes. Structlog is present in all
+three dependency files. JSON operational events go to stdout; the controller
+appends child output to each run's `service-worker.log` and mirrors new output to
+that model service's console (including Docker logs). The worker writes directly
+to the file, not a pipe; a broken console does not block its file output. Resume
+starts mirroring at the file's existing end, without replaying old attempts.
+No prompts, answers, GT,
+credentials or exception messages are passed to these log events.
+The same file also contains external libraries' stdout/stderr verbatim, which
+does not pass through our JSON/field filter. Inspect full logs before sharing;
+the privacy guarantee applies to our structured events, not all third-party output.
+
 ## Execution and consistency
 
 The website submits a run to API as before. API persists it, snapshots the
@@ -61,6 +75,16 @@ input hashes, dependencies, mock/real mode, shared bundle and pipeline code.
 Changing any of those requires restoring the environment or a new run/protocol.
 Cancellation is cooperative between requests; stopping a service or an explicit
 job timeout terminates only its own child. Committed responses are retained.
+
+`POST /runs/{run_id}/cancel` is the public cancellation route. Queued work is
+atomically removed without model initialization. If a worker claims the run
+concurrently, that same request flags the running job instead. Cancellation
+during loading or inference waits for the current operation, then preserves the
+committed response and stops; it does not forcibly interrupt CUDA. Cancelling
+an already cancelled run is idempotent; unknown IDs return 404 and other stopped
+or completed runs return 409. The website distinguishes **remove from queue**
+from **stop running**, disables duplicate requests while cancelling and offers
+resume only once the job has stopped.
 
 `PLANETARY_API_SERVICE_MAX_JOB_SECONDS=0` disables the subprocess timeout. A
 positive value is an optional loading+inference wall-clock limit, not an inference

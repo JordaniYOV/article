@@ -116,6 +116,17 @@ export default function App() {
     finally { setPending(''); mutationInFlight.current = false; }
   };
   const showError = (value: string) => setNotice({ message: value, kind: 'error' });
+  function controlRun(id: string, action: 'cancel' | 'resume') {
+    const wasQueued = runs.find((run) => run.id === id)?.status === 'queued';
+    void perform(id, async () => {
+      const updated = await api.control(id, action);
+      // Apply the acknowledgement immediately, without waiting for the next poll.
+      setRuns((current) => current.map((run) => run.id === id ? updated : run));
+      setNotice({ kind: 'success', message: action === 'resume' ? 'Запуск возвращён в очередь'
+        : updated.status === 'cancelled' ? (wasQueued ? 'Запуск убран из очереди' : 'Запуск отменён')
+        : 'Запрошена остановка после текущей операции' });
+    });
+  }
   function chooseDataset(id: number) { setBuiltinSelection(null); setDatasetId(id); }
   function chooseBuiltin(value: BuiltinSelection) {
     if (mutationInFlight.current) return;
@@ -149,7 +160,7 @@ export default function App() {
           void perform('start', async () => { const run = await api.start(model, datasetId, value, reuseId || undefined); selectRun(run.id); setProtocol(value); }, 'Запуск добавлен в очередь'); }} />
     </div>
     <RunHistory runs={runs} models={models} activeId={activeId} select={selectRun} pending={pending}
-      control={(id, action) => void perform(id, () => api.control(id, action), action === 'cancel' ? 'Запрошена остановка' : 'Запуск возвращён в очередь')} />
+      control={controlRun} />
     <ResultsPanel runs={runs} models={models} activeId={activeId} setActiveId={selectRun} secondId={secondId} setSecondId={selectSecond}
       report={report} secondReport={secondReport} comparison={comparison} comparisonError={comparisonError} reportError={reportError}
       pending={pending} calculate={(id) => void perform('metrics', () => api.metrics(id), 'Метрики рассчитаны и сохранены')}

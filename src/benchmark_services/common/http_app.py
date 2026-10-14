@@ -2,12 +2,12 @@
 
 from contextlib import asynccontextmanager
 import hmac
-import logging
 import platform
 import sys
 from threading import Event, Thread
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from api.logging import get_logger
 
 from .controller import JobController, ServiceBusy
 from .locks import gpu_busy
@@ -19,6 +19,7 @@ def create_service(service, settings=None):
     if service not in BACKENDS:
         raise ValueError("Unknown model service")
     settings = settings or Settings()
+    logger = get_logger("worker.http", service=service)
 
     def authorize(authorization: str | None = Header(default=None)):
         if not settings.service_token:
@@ -40,8 +41,8 @@ def create_service(service, settings=None):
                     controller.reap()
                     app.state.watchdog_error = None
                 except Exception as error:
-                    app.state.watchdog_error = f"{type(error).__name__}: {error}"
-                    logging.getLogger(__name__).exception("Model watchdog could not reap a job")
+                    app.state.watchdog_error = type(error).__name__
+                    logger.error("watchdog_reap_failed", error_type=type(error).__name__)
 
         thread = Thread(target=watchdog, name=f"{service}-watchdog", daemon=True)
         thread.start()

@@ -9,7 +9,9 @@ import sys
 import time
 
 from sqlmodel import Session, SQLModel, select
-from sqlalchemy import update as sql_update
+from sqlalchemy import case, update as sql_update
+
+from api.logging import get_logger
 
 from planetary_vlm.contracts import ModelResponse
 from planetary_vlm.inference.runner import dependency_versions
@@ -21,12 +23,57 @@ from .store import DatasetConfig, ModelConfig, ModelResult, ModelResultCreate, R
 from .preparation import load_bundle, prepare_bundle, PreparationCancelled
 
 
+def request_cancellation(session, run_id) -> bool:
+    """Atomically cancel queued work or flag a running job without stale ORM writes."""
+    changed = session.execute(sql_update(Run).where(
+        Run.id == run_id, Run.status.in_(("queued", "running"))).values(
+        cancel_requested=True,
+        status=case((Run.status == "queued", "cancelled"), else_=Run.status),
+        phase=case((Run.status == "queued", "stopped"), else_="cancelling"),
+        updated_at=utc_now()).execution_options(synchronize_session=False))
+    session.commit()
+    session.expire_all()
+    return changed.rowcount == 1
+
+
+def finish(engine, run_id, completed):
+    """Cancellation racing with the last response wins until completion is committed."""
+    with Session(engine) as session:
+        session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "running").values(
+            status=case((Run.cancel_requested.is_(True), "cancelled"), else_="completed"),
+            phase=case((Run.cancel_requested.is_(True), "stopped"), else_="finished"),
+            completed=completed, updated_at=utc_now()))
+        session.commit()
+
+
+def stop_cancelled(engine, run_id):
+    """Stop only this still-running cancellation, never a newly resumed queue item."""
+    with Session(engine) as session:
+        session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "running",
+            Run.cancel_requested.is_(True)).values(status="cancelled", phase="stopped",
+            error_message=None, updated_at=utc_now()))
+        session.commit()
+
+
+def record_failure(engine, run_id, message, *, cleanup=False):
+    """Commit failure atomically, retaining cancellation and any new queued attempt."""
+    eligible = ("running", "completed", "blocked", "failed", "interrupted") if cleanup else ("running",)
+    with Session(engine) as session:
+        session.execute(sql_update(Run).where(Run.id == run_id, Run.status.in_(eligible)).values(
+            status=case((Run.cancel_requested.is_(True), "cancelled"), else_="failed" if cleanup else "blocked"),
+            phase="stopped", error_message=case((Run.cancel_requested.is_(True), None), else_=message),
+            updated_at=utc_now()))
+        session.commit()
+        return session.get(Run, run_id).status
+
 
 def update(engine, run_id, **values):
     with Session(engine) as session:
-        run = session.get(Run, run_id)
-        run.sqlmodel_update({**values, "updated_at": utc_now()})
-        session.add(run)
+        # A progress write must not hide cancellation that committed concurrently.
+        phase = values.get("phase")
+        if phase in {"preparing", "loading", "inference"}:
+            values["phase"] = case((Run.cancel_requested.is_(True), "cancelling"), else_=phase)
+        session.execute(sql_update(Run).where(Run.id == run_id).values(**values, updated_at=utc_now()))
         session.commit()
 
 
@@ -38,11 +85,10 @@ def cancelled(engine, run_id):
 def recover(engine):
     # Called only while holding the project GPU lock; no live worker can own these.
     with Session(engine) as session:
-        for run in session.exec(select(Run).where(Run.status == "running")):
-            run.status, run.phase = "interrupted", "stopped"
-            run.error_message = "Worker stopped; resume to continue from saved responses"
-            run.updated_at = utc_now()
-            session.add(run)
+        session.execute(sql_update(Run).where(Run.status == "running").values(
+            status=case((Run.cancel_requested.is_(True), "cancelled"), else_="interrupted"),
+            phase="stopped", error_message=case((Run.cancel_requested.is_(True), None),
+                else_="Worker stopped; resume to continue from saved responses"), updated_at=utc_now()))
         session.commit()
 
 
@@ -68,11 +114,19 @@ def map_artifacts(raw, folder):
 def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
     adapter = None
     cleanup_failed = None
+    started = time.perf_counter()
+    logger = get_logger("worker.execution", run_id=run_id)
     try:
         with Session(engine) as session:
             run = session.get(Run, run_id)
             model, dataset = session.get(ModelConfig, run.model_config_id), session.get(DatasetConfig, run.dataset_config_id)
             prior = session.exec(select(ModelResult).where(ModelResult.run_id == run.id)).all()
+        logger = logger.bind(backend=model.backend, mock=mock_mode or model.backend == "mock")
+        logger.info("execution_started")
+        if cancelled(engine, run_id):
+            stop_cancelled(engine, run_id)
+            logger.info("execution_cancelled", reason="before_preparation")
+            return
         folder = safe_path(run.output_dir, paths.WORKSPACE_ROOT / "outputs")
         protocol = run.protocol
         if not model.enabled or model.config_sha256 != protocol["model_config_sha256"]:
@@ -128,12 +182,18 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
         atomic_json(folder / "selection.json", run.samples)
         pending = [request for request in requests if request.request_id not in done]
         if cancelled(engine, run.id):
-            update(engine, run.id, status="cancelled", phase="stopped")
+            stop_cancelled(engine, run.id)
+            logger.info("execution_cancelled", reason="before_loading")
             return
         if pending:
             update(engine, run.id, loading={**run.loading, "mock": is_mock,
                 "execution_mode": execution_mode, "pipeline_sha256": pipeline_hash})
             update(engine, run.id, phase="loading", completed=len(done))
+            logger.info("model_loading_started", completed=len(done), total=len(requests), pending=len(pending))
+            if cancelled(engine, run.id):
+                stop_cancelled(engine, run.id)
+                logger.info("execution_cancelled", reason="before_adapter_initialization")
+                return
             random.seed(protocol["seed"])
             np.random.seed(protocol["seed"])
             options = {**model.options, "seed": protocol["seed"], "local_files_only": True}
@@ -153,10 +213,12 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
                     "mock": is_mock, "execution_mode": execution_mode, "pipeline_sha256": pipeline_hash}
                 update(engine, run.id, loading=loading)
                 atomic_json(folder / "loading.json", loading)
+                logger.info("model_loading_completed", elapsed_seconds=loading["elapsed_seconds"])
             update(engine, run.id, phase="inference")
         for request in pending:
             if cancelled(engine, run.id):
-                update(engine, run.id, status="cancelled", phase="stopped")
+                stop_cancelled(engine, run.id)
+                logger.info("execution_cancelled", reason="before_request")
                 return
             start = time.perf_counter()
             artifacts = {}
@@ -171,6 +233,7 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
                     run_id=run.id, request_id=request.request_id, status=response.status,
                     raw_response=response.raw_response, elapsed_seconds=response.elapsed_seconds)
             except Exception as error:
+                logger.error("request_failed", request_id=request.request_id, error_type=type(error).__name__)
                 response = ModelResponse(request.request_id, "", "error", time.perf_counter() - start,
                     f"{type(error).__name__}: {error}")
                 artifacts = {}
@@ -191,21 +254,34 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
                 session.add(row)
                 session.add(current)
                 session.commit()
+                completed = current.completed
+            logger.info("request_completed", request_id=request.request_id, status=response.status,
+                completed=completed, total=len(requests), elapsed_seconds=time.perf_counter() - start)
             # SQLite is authoritative; rebuilding this file also repairs crash gaps.
             export_predictions(engine, run)
-        update(engine, run.id, status="cancelled" if cancelled(engine, run.id) else "completed",
-            phase="finished", completed=len(requests))
+        finish(engine, run.id, len(requests))
+        with Session(engine) as session:
+            final_status = session.get(Run, run.id).status
+        logger.info("execution_cancelled" if final_status == "cancelled" else "execution_completed",
+            status=final_status, completed=len(requests), total=len(requests),
+            elapsed_seconds=time.perf_counter() - started)
     except PreparationCancelled:
-        update(engine, run_id, status="cancelled", phase="stopped")
+        stop_cancelled(engine, run_id)
+        logger.info("execution_cancelled", reason="during_preparation")
     except Exception as error:
-        update(engine, run_id, status="blocked", phase="stopped", error_message=f"{type(error).__name__}: {error}")
+        failure_status = record_failure(engine, run_id, f"{type(error).__name__}: {error}")
+        logger.error("execution_cancelled" if failure_status == "cancelled" else "execution_blocked",
+            status=failure_status, error_type=type(error).__name__)
     finally:
         if adapter is not None:
             try:
                 adapter.close()
             except Exception as error:
                 cleanup_failed = error
-                update(engine, run_id, status="failed", phase="stopped", error_message=f"Resource cleanup failed: {error}")
+                record_failure(engine, run_id, f"Resource cleanup failed: {error}", cleanup=True)
+                logger.error("resource_cleanup_failed", error_type=type(error).__name__)
+            else:
+                logger.info("resource_cleanup_completed")
         with Session(engine) as session:
             run = session.get(Run, run_id)
             folder = safe_path(run.output_dir, paths.WORKSPACE_ROOT / "outputs")
@@ -216,11 +292,13 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
 
 def process_next(engine):
     with Session(engine) as session:
-        run = session.exec(select(Run).where(Run.status == "queued").order_by(Run.created_at, Run.id).limit(1)).first()
+        run = session.exec(select(Run).where(Run.status == "queued", Run.cancel_requested.is_(False))
+            .order_by(Run.created_at, Run.id).limit(1)).first()
         if run is None:
             return False
         run_id = run.id
-        claimed = session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "queued").values(
+        claimed = session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "queued",
+            Run.cancel_requested.is_(False)).values(
             status="running", phase="preparing", updated_at=utc_now()))
         session.commit()
         if claimed.rowcount != 1:
@@ -254,15 +332,17 @@ def run_selected(settings, run_id, backends, *, mock_mode=False):
                 model = session.get(ModelConfig, selected.model_config_id)
                 if model.backend not in backends:
                     raise ValueError("Run belongs to a different model service")
-                if selected.status != "queued":
+                if selected.status != "queued" or selected.cancel_requested:
                     return False
             recover(engine)
             with Session(engine) as session:
-                claimed = session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "queued").values(
+                claimed = session.execute(sql_update(Run).where(Run.id == run_id, Run.status == "queued",
+                    Run.cancel_requested.is_(False)).values(
                     status="running", phase="preparing", error_message=None, updated_at=utc_now()))
                 session.commit()
                 if claimed.rowcount != 1:
                     return False
+            get_logger("worker.execution", run_id=run_id, mock=mock_mode, backend=model.backend).info("job_claimed")
             attempt_id = os.environ.get("PLANETARY_SERVICE_ATTEMPT_ID")
             if attempt_id:
                 folder = safe_path(selected.output_dir, paths.WORKSPACE_ROOT / "outputs")

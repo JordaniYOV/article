@@ -78,7 +78,7 @@ describe('evaluation workspace', () => {
     expect(selectedModel.id).toBe(7); expect(selectedDataset).toBe(3);
     expect(protocol.image_count).toBe(10); expect(protocol.distortions).toHaveLength(5);
     await screen.findByText('В очереди');
-    expect(screen.getByRole('button', { name: 'Остановить запуск fixture-' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Убрать из очереди запуск fixture-' })).toBeEnabled();
   });
   it('uses completed reports, marks fixture scores, and invokes metric calculation', async () => {
     vi.mocked(api.runs).mockResolvedValue([run]); vi.mocked(api.metrics).mockResolvedValue({});
@@ -94,6 +94,45 @@ describe('evaluation workspace', () => {
     vi.mocked(api.models).mockResolvedValue([{ ...model, enabled: false }]);
     render(<App />); await screen.findByText('Включите запуск в настройках модели.');
     expect(screen.getByRole('button', { name: 'Запустить сбор ответов' })).toBeDisabled();
+  });
+  it('removes a waiting-service task from the queue and offers resume', async () => {
+    const queued = { ...run, status: 'queued', phase: 'waiting_service', completed: 0 };
+    const cancelled = { ...queued, status: 'cancelled', phase: 'stopped', cancel_requested: true };
+    vi.mocked(api.runs).mockResolvedValue([queued]);
+    vi.mocked(api.control).mockImplementation(async () => {
+      vi.mocked(api.runs).mockResolvedValue([cancelled]);
+      return cancelled;
+    });
+    const user = userEvent.setup(); render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Убрать из очереди запуск fixture-' }));
+    expect(api.control).toHaveBeenCalledExactlyOnceWith(run.id, 'cancel');
+    await screen.findByText('Запуск убран из очереди');
+    expect(screen.queryByRole('button', { name: 'Убрать из очереди запуск fixture-' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Продолжить запуск fixture-' })).toBeEnabled();
+  });
+  it('waits for running cancellation without offering a duplicate stop', async () => {
+    const running = { ...run, status: 'running', phase: 'loading' };
+    const stopping = { ...running, phase: 'cancelling', cancel_requested: true };
+    vi.mocked(api.runs).mockResolvedValue([running]);
+    vi.mocked(api.control).mockImplementation(async () => {
+      vi.mocked(api.runs).mockResolvedValue([stopping]);
+      return stopping;
+    });
+    const user = userEvent.setup(); render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Остановить запуск fixture-' }));
+    await screen.findByText('Запрошена остановка после текущей операции');
+    expect(screen.getByRole('button', { name: 'Остановить запуск fixture-' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Продолжить запуск fixture-' })).not.toBeInTheDocument();
+    expect(api.control).toHaveBeenCalledTimes(1);
+  });
+  it('shows cancellation rejection without inventing a cancelled state', async () => {
+    vi.mocked(api.runs).mockResolvedValue([{ ...run, status: 'queued', phase: 'waiting' }]);
+    vi.mocked(api.control).mockRejectedValue(new Error('Run is not queued or running'));
+    const user = userEvent.setup(); render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Убрать из очереди запуск fixture-' }));
+    await screen.findByText('Run is not queued or running');
+    expect(screen.getByRole('button', { name: 'Убрать из очереди запуск fixture-' })).toBeEnabled();
+    expect(screen.queryByText('Запуск убран из очереди')).not.toBeInTheDocument();
   });
   it('requires a selection within the uploaded dataset size', async () => {
     vi.mocked(api.datasets).mockResolvedValue([{ ...dataset, provenance: { sample_count: 3 } }]);
