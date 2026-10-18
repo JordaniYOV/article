@@ -85,6 +85,31 @@ CLI и UI используют одну `.state/api-worker.lock`: паралле
 optimizer/scheduler/RNG после полной эпохи. Прерванная эпоха повторяется.
 Изменение кода/версий/данных блокирует reuse. Логи: консоль + `events.log` + logs/.
 
+### Если smoke упал с Missing/Unexpected keys для CLIP
+
+Веса SpaceLLaVA используют `vision_model.*`; Transformers 5.15.1 ожидает эти
+параметры непосредственно как `embeddings.*`, `encoder.*` и т.д. Текущий loader
+сопоставляет весь набор из391 tensor names с фактическим model.state_dict и
+применяет только точное взаимно-однозначное переименование. `strict=True`
+сохранён; недостающие/лишние параметры и несовместимые shapes не игнорируются.
+
+Перенеси обновлённый `linear_head_approach/encoders.py` на GPU-компьютер. Веса и
+окружение не переустанавливать. После изменения кода используй новый каталог:
+старый `identity.json` создаётся ещё перед загрузкой, даже если smoke упал.
+Не удаляй/редактируй identity для обхода проверки и не смешивай старые и новые runs.
+
+```powershell
+& $headPython -u -B -m linear_head_approach train --encoder spacellava --experiment outputs/heads_rtx3060ti_clipfix_v1 --resume
+```
+
+Эта команда действительно запустит GPU smoke и продолжит обучение только после
+его успеха. Если нужна лишь проверка загрузки, можно отдельно запустить
+`extract --smoke` с новым `--output` и `--session-id`; он извлекает только два
+изображения, без fit/test. Предварительно успешно обученные головы/кэши другой
+версии сохранить отдельно; экспорт требует тот же code/environment, что fit.
+В следующих командах publish/evaluate/preview указывай новый experiment path,
+а не прежний `outputs/heads_rtx3060ti_v1` из примеров ниже.
+
 ## 4. Экспорт обученных голов для UI
 
 После успешного fit (пример одной spatial head; повторить для всех seeds/families):

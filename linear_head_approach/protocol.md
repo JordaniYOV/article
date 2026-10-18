@@ -32,6 +32,11 @@ revision `20f800becb64a0c7ad314652a683f97f0281fe67`, source card license claim C
 RGB square 512→official 336 processor, native spatial feature grid 24×24×1024.
 Мультимодальный projector и LLM исключены. Tower vs original CLIP equality не
 проверена; Remyx SpaceLLaVA не является OSUPCVLab LLaVA-LE.
+Checkpoint names `vision_model.*` загружаются с точным полным соответствием
+model.state_dict: legacy wrapped layout либо flat layout
+[Transformers5.15.1 CLIPVisionModel](https://github.com/huggingface/transformers/blob/v5.15.1/src/transformers/models/clip/modeling_clip.py).
+Меняются только имена ключей, не тензоры; strict=True обязателен для всех391
+параметров. Нельзя игнорировать missing/unexpected keys через strict=False.
 
 **IBM:** original `NASA-IBM-Lunar-Foundation-Model` revision
 `b657bdfe6fc4c0445d918f77a2d7b919805f3bce`, backbone checkpoint/config known hashes.

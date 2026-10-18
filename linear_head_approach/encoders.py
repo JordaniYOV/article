@@ -29,6 +29,32 @@ IBM_HASHES = {"backbone/checkpoint.pt": "5843824dfa56f89552b37b5295aa865ed28777c
               "backbone/config.yaml": "fd94d20eb2b1cd4379516da3d2c1912a56a8684e1952ee9331abd63e7c59e619"}
 
 
+def clip_key_map(checkpoint_keys, model_keys):
+    """Map the pinned tower to either HF layout, with an exact key bijection.
+
+    Transformers 4 wraps CLIPVisionTransformer in ``vision_model``; 5 exposes
+    the same vision parameters directly. No tensor is skipped, added or guessed.
+    Tensor shapes remain the responsibility of strict load_state_dict.
+    """
+    checkpoint_keys, model_keys = list(checkpoint_keys), list(model_keys)
+    if (not checkpoint_keys or len(set(checkpoint_keys)) != len(checkpoint_keys)
+            or len(set(model_keys)) != len(model_keys)):
+        raise ValueError("Empty or duplicate CLIP state-dict keys")
+    prefix = SPACE_PREFIX + "vision_model."
+    if any(not key.startswith(prefix) for key in checkpoint_keys):
+        raise ValueError("Expected only pinned SpaceLLaVA vision_model tensor keys")
+    expected = set(model_keys)
+    for layout, remove in (("wrapped", SPACE_PREFIX), ("flat", prefix)):
+        mapped = {key.removeprefix(remove): key for key in checkpoint_keys}
+        if len(mapped) == len(checkpoint_keys) and set(mapped) == expected:
+            return mapped, layout
+    raise ValueError(
+        "CLIP state-dict namespace mismatch: neither wrapped nor flat layout "
+        f"exactly matches all model keys (checkpoint={len(checkpoint_keys)}, model={len(model_keys)}). "
+        "Partial/randomly initialized vision weights are forbidden."
+    )
+
+
 def assets(directory, encoder, allow_download=False):
     """Explicit pinned download on the GPU host only. No full SpaceLLaVA weights."""
     directory = Path(directory)
@@ -95,8 +121,10 @@ def load(directory, encoder, root=ROOT, device="cuda"):
             raise ValueError("Actual SpaceLLaVA tower shard/key count changed")
         cfg = CLIPConfig.from_pretrained(str(directory / "clip_config"), local_files_only=True)
         model = CLIPVisionModel(cfg.vision_config)
+        key_map, layout = clip_key_map(keys, model.state_dict().keys())
         with safe_open(str(folder / "model-00006-of-00006.safetensors"), framework="pt", device="cpu") as handle:
-            model.load_state_dict({k.removeprefix(SPACE_PREFIX): handle.get_tensor(k) for k in keys}, strict=True)
+            model.load_state_dict({target: handle.get_tensor(source) for target, source in key_map.items()}, strict=True)
+        print(f"CLIP vision weights loaded: tensors={len(key_map)} namespace={layout} strict=True", flush=True)
         processor = CLIPImageProcessor.from_pretrained(str(folder), local_files_only=True)
 
         def forward(row):
