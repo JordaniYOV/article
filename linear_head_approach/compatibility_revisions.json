@@ -1,0 +1,136 @@
+{
+  "schema": "frozen-heads-code-compatibility-v1",
+  "reason": "Only the CLIP namespace mapping changed between these revisions; IBM encoder, heads, training and preprocessing are unchanged. Compatibility is limited to publishing completed heads and frozen inference, not training resume.",
+  "profiles": [
+    {
+      "id": "ibm-before-clip-namespace-fix",
+      "git_revision": "b6577c17b0a39df6b42a15a027a5d85310474a35",
+      "encoders": [
+        "ibm"
+      ],
+      "file_sha256": {
+        "__init__.py": [
+          "fbcb26aeb5ebc02d38c2bc89e643dcf8b89a6b3e39caea0038da9e018e11ce6f",
+          "eb5d1963d16e453941030edbe52f107029814b30b1fe88d7aae1aaf8cddb2be4"
+        ],
+        "__main__.py": [
+          "566ee8141e548a7ce69b2b4a850850d243912e79dc9b0e9dabb7bd1b31251c9a",
+          "67e9af56177456f971d46f92146c1228aec1a6d20aea4a5cac499c4ffb2120da"
+        ],
+        "build_notebook.py": [
+          "ba0ee451b3ae04a4b0611e3ca6098546aab4a62367270b7afbb3c6bb4f62305b",
+          "b36ddb97fe2bf084c25ac090248672eb32fffebf0ba01b9c35e656fc75bfa318"
+        ],
+        "bundle.py": [
+          "e8cabe7770d51f41822c1d61168f35c71467d47e270378ce6ee0e8a6ff100588",
+          "c712ec6184150ede5bc87a8ef6aa7aaa0726e9fa78315fcc0a4f97600a206b51"
+        ],
+        "common.py": [
+          "7458b11aa9632942cbd60a61a0891a0926fe99a93252799034b23619a586a738",
+          "18c781618f317a61583595cef1a86376fc179d4483e96f57da631e2ccaf5095c"
+        ],
+        "data.py": [
+          "40b1b0b0a37b056c77186356121b823edb0b011c2430f9ea382610f963182f86",
+          "979bd8e3d11a035007cec064f71aa9661ad8ada28f243fc14eecef5989e62dde"
+        ],
+        "deployment.py": [
+          "b7899eb2a709111317b15b85defe21914646de5554f659b2232461138aed7c49",
+          "3f11cbf1e01240f154a9bc365da6030e564dbe6fb4c57131b3b3de00d2fd1128"
+        ],
+        "encoders.py": [
+          "de708fce811684ed64a9f521a3c357044b146937954d339e1f4f93bd1222476d",
+          "06be8e3c84a8b62d71be306c831883d07f26423657cc16038a2e1f160dbc9592"
+        ],
+        "heads.py": [
+          "71e88101b90edc6142549ae8b4e99c590504b3a9161cc6f669a4beaf1d3beb93",
+          "b6b2896d6efcc22b0bd2bf8494a1d119f256c53b3d14debe06dd622aa0f39865"
+        ],
+        "local.py": [
+          "8dedc206608e5052435ddfa2bfbccec21258ebd09985dbeadf14bc7ae3928f45",
+          "4f5520329f5dff0645c1c19e8f90e2111873fdebdea108418463f97e083e6dc8"
+        ],
+        "reporting.py": [
+          "fbbc8aadbd060e36bf320eb27d0bab2e18185cdfdcac4f276e18a6e56bfeeaba",
+          "03c58a4c1adec0ef93f9124b8cb32a54164a03ae9b6239690a4c669ecb394cc4"
+        ],
+        "training.py": [
+          "6311ecab3eb2d61dc13853d78bb2769844b3620393310076c223ed8a03f79ea8",
+          "de588e61c595774fa3f6a7e5fd7a6aa4b9285a5f4204503a0d2dd8d067243b48"
+        ]
+      }
+    },
+    {
+      "id": "after-clip-namespace-fix",
+      "git_revision": "a0b6d57c97f86e231fe6aa0999e72657b0f272d9",
+      "encoders": [
+        "ibm",
+        "spacellava"
+      ],
+      "file_sha256": {
+        "__init__.py": [
+          "fbcb26aeb5ebc02d38c2bc89e643dcf8b89a6b3e39caea0038da9e018e11ce6f",
+          "eb5d1963d16e453941030edbe52f107029814b30b1fe88d7aae1aaf8cddb2be4"
+        ],
+        "__main__.py": [
+          "566ee8141e548a7ce69b2b4a850850d243912e79dc9b0e9dabb7bd1b31251c9a",
+          "67e9af56177456f971d46f92146c1228aec1a6d20aea4a5cac499c4ffb2120da"
+        ],
+        "build_notebook.py": [
+          "ba0ee451b3ae04a4b0611e3ca6098546aab4a62367270b7afbb3c6bb4f62305b",
+          "b36ddb97fe2bf084c25ac090248672eb32fffebf0ba01b9c35e656fc75bfa318"
+        ],
+        "bundle.py": [
+          "e8cabe7770d51f41822c1d61168f35c71467d47e270378ce6ee0e8a6ff100588",
+          "c712ec6184150ede5bc87a8ef6aa7aaa0726e9fa78315fcc0a4f97600a206b51"
+        ],
+        "common.py": [
+          "7458b11aa9632942cbd60a61a0891a0926fe99a93252799034b23619a586a738",
+          "18c781618f317a61583595cef1a86376fc179d4483e96f57da631e2ccaf5095c"
+        ],
+        "data.py": [
+          "40b1b0b0a37b056c77186356121b823edb0b011c2430f9ea382610f963182f86",
+          "979bd8e3d11a035007cec064f71aa9661ad8ada28f243fc14eecef5989e62dde"
+        ],
+        "deployment.py": [
+          "b7899eb2a709111317b15b85defe21914646de5554f659b2232461138aed7c49",
+          "3f11cbf1e01240f154a9bc365da6030e564dbe6fb4c57131b3b3de00d2fd1128"
+        ],
+        "encoders.py": [
+          "27b4b065bc181ca430d6f7b5fa8503a59788ac2e897c69d3a1fdf69f3973d376",
+          "6a59e4b78a5a0f4d414f61c1e7aa0330e3ecc893d5a2012b0560d50fc5228600"
+        ],
+        "heads.py": [
+          "71e88101b90edc6142549ae8b4e99c590504b3a9161cc6f669a4beaf1d3beb93",
+          "b6b2896d6efcc22b0bd2bf8494a1d119f256c53b3d14debe06dd622aa0f39865"
+        ],
+        "local.py": [
+          "8dedc206608e5052435ddfa2bfbccec21258ebd09985dbeadf14bc7ae3928f45",
+          "4f5520329f5dff0645c1c19e8f90e2111873fdebdea108418463f97e083e6dc8"
+        ],
+        "reporting.py": [
+          "fbbc8aadbd060e36bf320eb27d0bab2e18185cdfdcac4f276e18a6e56bfeeaba",
+          "03c58a4c1adec0ef93f9124b8cb32a54164a03ae9b6239690a4c669ecb394cc4"
+        ],
+        "training.py": [
+          "6311ecab3eb2d61dc13853d78bb2769844b3620393310076c223ed8a03f79ea8",
+          "de588e61c595774fa3f6a7e5fd7a6aa4b9285a5f4204503a0d2dd8d067243b48"
+        ]
+      }
+    }
+  ],
+  "runtime_sha256": {
+    "__init__.py": "fbcb26aeb5ebc02d38c2bc89e643dcf8b89a6b3e39caea0038da9e018e11ce6f",
+    "__main__.py": "566ee8141e548a7ce69b2b4a850850d243912e79dc9b0e9dabb7bd1b31251c9a",
+    "build_notebook.py": "ba0ee451b3ae04a4b0611e3ca6098546aab4a62367270b7afbb3c6bb4f62305b",
+    "bundle.py": "e8cabe7770d51f41822c1d61168f35c71467d47e270378ce6ee0e8a6ff100588",
+    "common.py": "7458b11aa9632942cbd60a61a0891a0926fe99a93252799034b23619a586a738",
+    "compatibility.py": "565e07d414b0c205e9197c0a145e6feef2513268aca73e33f49498ffea355903",
+    "data.py": "40b1b0b0a37b056c77186356121b823edb0b011c2430f9ea382610f963182f86",
+    "deployment.py": "f3339d45f696b0a1a6e0b12d36ceacc824813c96e974a6385e6f252e8b394e3e",
+    "encoders.py": "27b4b065bc181ca430d6f7b5fa8503a59788ac2e897c69d3a1fdf69f3973d376",
+    "heads.py": "71e88101b90edc6142549ae8b4e99c590504b3a9161cc6f669a4beaf1d3beb93",
+    "local.py": "8dedc206608e5052435ddfa2bfbccec21258ebd09985dbeadf14bc7ae3928f45",
+    "reporting.py": "fbbc8aadbd060e36bf320eb27d0bab2e18185cdfdcac4f276e18a6e56bfeeaba",
+    "training.py": "6311ecab3eb2d61dc13853d78bb2769844b3620393310076c223ed8a03f79ea8"
+  }
+}

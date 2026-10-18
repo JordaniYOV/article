@@ -110,6 +110,27 @@ optimizer/scheduler/RNG после полной эпохи. Прерванная
 В следующих командах publish/evaluate/preview указывай новый experiment path,
 а не прежний `outputs/heads_rtx3060ti_v1` из примеров ниже.
 
+### Если publish старой IBM-головы сообщил Training identity changed
+
+Первоначальный code hash охватывает все Python-модули, поэтому изменение CLIP
+блокировало даже готовую IBM-голову. В текущем exporter/worker есть узкая audited
+compatibility policy: IBM до CLIP-fix и обе модели после fix. Проверяются полные
+исторические manifests исходников (включая варианты Git LF/CRLF) и точный текущий
+runtime. Неизвестные правки и изменения Python/packages по-прежнему запрещены.
+
+Это только совместимость **экспорта завершённой головы и frozen inference**,
+не разрешение продолжать старое обучение под новым кодом. `identity.json`,
+`best.pt`, features и threshold не переписываются. В deployment отдельно остаются
+исходная training identity и проверяемая code_compatibility attestation.
+
+Перенеси обновлённую папку `linear_head_approach/`,
+`src/benchmark_services/heads/adapter.py` и
+`src/benchmark_services/common/execution.py` на GPU-компьютер. Затем повтори прежний
+publish для IBM в новом output-каталоге. Скачивать веса и переобучать голову из-за
+этой конкретной CLIP-правки не требуется. Если сообщение теперь говорит именно о
+Python/dependency versions, восстанови frozen training environment, а не меняй
+сохранённую identity вручную.
+
 ## 4. Экспорт обученных голов для UI
 
 После успешного fit (пример одной spatial head; повторить для всех seeds/families):

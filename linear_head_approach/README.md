@@ -25,6 +25,7 @@ benchmark через UI/FastAPI и отдельный inference-only heads-worke
 | `reporting.py` | Кривые, фиксированные val-примеры, парное сравнение по сценам |
 | `local.py` | Doctor, pinned source setup, последовательный CLI train coordinator |
 | `deployment.py` | Экспорт обученной головы и JSON для импорта в UI, без test scoring |
+| `compatibility.py`, `compatibility_revisions.json` | Точечная проверка исторического кода для export/inference, без изменения исходных identities/checkpoints |
 | `setup_windows.ps1` | Явная установка отдельного Windows-окружения, без весов/обучения |
 | `bundle.py` | Проверенная миграция прежней выборки и переносимый ZIP, без весов |
 | `build_notebook.py` | Генерация учебного notebook через nbformat |

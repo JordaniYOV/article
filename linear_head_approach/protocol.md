@@ -89,6 +89,17 @@ history, wait counter, epoch, identity. Запись atomic rename на том �
 Exact identity mismatch закрывает resume. Нельзя загружать сторонние untrusted .pt:
 checkpoints содержат Python RNG objects и читаются weights_only=False.
 
+Для завершённых legacy runs предусмотрена узкая export/inference compatibility
+policy (`compatibility_revisions.json`): точные manifests revisions
+`b6577c17b0a39df6b42a15a027a5d85310474a35` (только IBM) и
+`a0b6d57c97f86e231fe6aa0999e72657b0f272d9` (IBM/SpaceLLaVA). Между ними изменён
+только CLIP loader; IBM encoder/preprocessing и head training неизменны. LF/CRLF
+учтены как варианты точных исторических hashes. Current runtime тоже проверяется
+полностью. Identity/checkpoint не модифицируются: original training identity и
+отдельная compatibility attestation сохраняются в deployment и проверяются
+worker. Это не универсальный bypass, не разрешение resume и не отмена проверки
+окружения, весов, targets и threshold. Любые неизвестные изменения блокируются.
+
 CLI-оценка test закрыта отдельным `--allow-test`; notebook требует завершить обе
 модели до оценки. UI запускает test только при явном выборе этого split после
 экспорта фиксированной головы. Audit проверяет целостность всех splits, включая

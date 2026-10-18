@@ -2,7 +2,8 @@
 from pathlib import Path
 import shutil
 
-from .common import ROOT, atomic_json, code_hash, environment, read_json, rows, sha, write_rows
+from .common import ROOT, atomic_json, environment, read_json, rows, sha, write_rows
+from .compatibility import code_compatibility
 from .data import DATA, audit
 
 
@@ -17,10 +18,15 @@ def publish(run, assets_dir, output, name, root=ROOT):
         raise ValueError("Only a completed, frozen-encoder, validation-selected run can be published")
     saved = torch.load(run / "best.pt", map_location="cpu", weights_only=True)
     identity = read_json(run / "identity.json")
-    if saved["identity"] != identity or identity["code"] != code_hash() or identity["environment"] != environment():
-        raise ValueError("Training identity changed; restore the exact environment/code")
+    if saved["identity"] != identity:
+        raise ValueError("Checkpoint identity differs from identity.json; original run files must remain unchanged")
+    if identity["environment"] != environment():
+        raise ValueError("Training Python/dependency versions changed; use the exact frozen training environment")
+    compatibility = code_compatibility(identity)
     if identity["targets_sha256"] != sha(root / DATA / "targets.jsonl"):
         raise ValueError("Training targets changed")
+    if identity["feature_identity"]["inputs_sha256"] != sha(root / DATA / "inputs.jsonl"):
+        raise ValueError("Encoder inputs changed since feature extraction")
     audit(root)
     encoder = identity["feature_identity"]["encoder"]
     if encoder not in {"ibm", "spacellava"}:
@@ -52,6 +58,7 @@ def publish(run, assets_dir, output, name, root=ROOT):
         "encoder": encoder, "family": identity["family"], "seed": identity["seed"], "channels": saved["channels"],
         "hidden_channels": identity["config"]["hidden_channels"], "threshold": saved["threshold"],
         "threshold_selected_on": "val", "best_epoch": saved["epoch"] + 1, "training_identity": identity,
+        "code_compatibility": compatibility,
         "assets_dir": str(assets_dir), "checkpoint_parameters": saved["parameters"],
         "source_run": str(run), "benchmark_manifest": str(evaluation_path), "benchmark_sha256": sha(evaluation_path),
         "classes": CLASSES, "shape": [512, 512], "clean_only": True,
@@ -63,4 +70,4 @@ def publish(run, assets_dir, output, name, root=ROOT):
                "version": "v1", "kind": "frozen_crater_deployment"}
     atomic_json(output / "import_in_ui.json", pointer)
     return {"deployment": str(path), "ui_import": str(output / "import_in_ui.json"),
-            "training_started": False, "test_evaluated": False}
+            "training_started": False, "test_evaluated": False, "code_compatibility": compatibility}

@@ -24,11 +24,11 @@ class FrozenCraterAdapter:
         sys.path.insert(0, str(root))
         from linear_head_approach.encoders import load
         from linear_head_approach.heads import CraterHead
-        from linear_head_approach.common import code_hash, rows, environment
+        from linear_head_approach.common import rows, environment
+        from linear_head_approach.compatibility import verify_deployment_code
         path, self.deployment = read_deployment(self.options["deployment_path"], self.options["deployment_sha256"], root)
         data = self.deployment
-        if data["training_identity"]["code"] != code_hash():
-            raise ValueError("Head training code differs from this checkout; restore its exact code")
+        self.code_compatibility = verify_deployment_code(data)
         if data["training_identity"]["environment"] != environment():
             raise ValueError("Head service must use the same frozen environment as CLI training")
         saved = torch.load(path.parent / "head.pt", map_location="cpu", weights_only=True)
@@ -49,6 +49,7 @@ class FrozenCraterAdapter:
             raise ValueError("Training samples cannot be served as benchmark scenes")
         return {"encoder": data["encoder"], "family": data["family"], "head_sha256": data["files_sha256"]["head.pt"],
                 "deployment_sha256": self.options["deployment_sha256"], "threshold": data["threshold"],
+                "code_compatibility": self.code_compatibility,
                 "clean_only": True, "timing": "live_encoder_plus_head_excludes_initial_loading", "input_warning": data["input_warning"]}
 
     def predict(self, request):

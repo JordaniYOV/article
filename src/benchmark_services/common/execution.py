@@ -164,7 +164,7 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
             pipeline_files["adapter.py"] = file_hash(Path(__file__).resolve().parents[1] / adapter_package / "adapter.py")
         if model.backend == "frozen_crater":
             pipeline_files["heads_contract.py"] = file_hash(Path(__file__).resolve().parents[2] / "planetary_vlm/heads_contract.py")
-            for name in ("encoders.py", "heads.py", "common.py"):
+            for name in ("encoders.py", "heads.py", "common.py", "compatibility.py", "compatibility_revisions.json"):
                 pipeline_files[f"frozen/{name}"] = file_hash(Path(__file__).resolve().parents[3] / "linear_head_approach" / name)
         pipeline_hash = digest(pipeline_files)
         if metadata_path.exists():
