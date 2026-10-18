@@ -15,6 +15,14 @@ describe('scientific display contracts', () => {
     expect(metricValue(value, 'dice')).toBe(.73);
     expect(metricValue(value, 'accuracy')).toBeNull();
   });
+  it('does not display catalog crater scores as IMP mean IoU or QA accuracy', () => {
+    const value = { ...condition, metric_family: 'catalog_crater_segmentation', quality: { crater_iou: .7, crater_dice: .8, prediction_coverage: 1 } };
+    expect(metricValue(value, 'crater_iou')).toBe(.7);
+    expect(metricValue(value, 'crater_dice')).toBe(.8);
+    expect(metricValue(value, 'mean_iou')).toBeNull();
+    expect(metricValue(value, 'accuracy')).toBeNull();
+    expect(metricValue(value, 'dice')).toBeNull();
+  });
   it('copies the ordered reusable protocol, removing internal metadata', () => {
     const copied = cleanProtocol({ ...run.protocol, ...{ selection_sha256: 'internal', model_config_sha256: 'internal' } });
     expect(copied.distortions.at(-1)).toEqual(['shear', 'hard_shadows', 'lens_flare', 'radiation']);

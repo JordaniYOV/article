@@ -105,7 +105,10 @@ class RealHTTPTests(unittest.TestCase):
                     wait_until(lambda: request("GET", "/health", server=name))
                 health = request("GET", "/services")
                 self.assertTrue(health["dispatcher_enabled"])
-                self.assertTrue(all(value["mock"] for value in health["services"].values()))
+                self.assertTrue(all(health["services"][name]["mock"] for name in ("spacellava", "ibm")))
+                # The optional trained-head service is not started in this legacy
+                # full-system fixture; its absence must not block those backends.
+                self.assertEqual(health["services"]["heads"]["status"], "unavailable")
                 data_root = root / "data_orbital"
                 data_root.mkdir()
                 image, mask = data_root / "image.png", data_root / "mask.png"
@@ -138,7 +141,7 @@ class RealHTTPTests(unittest.TestCase):
                     self.assertTrue(rows[0]["mock"])
                     self.assertTrue(request("GET", run["report_url"])["mock"])
                 wait_until(lambda: all(not value["gpu_busy"] and value["active_run_id"] is None
-                    for value in request("GET", "/services")["services"].values()))
+                    for name, value in request("GET", "/services")["services"].items() if name in {"spacellava", "ibm"}))
                 left, right = (request("GET", run["results_url"])[0] for run in runs)
                 self.assertEqual(left["image_paths"], right["image_paths"])
             finally:

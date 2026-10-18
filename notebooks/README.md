@@ -1,5 +1,15 @@
 # Planetary vision models: Google Colab
 
+## Новый отдельный опыт: обучение голов замороженных энкодеров
+
+[`encoder_heads_colab.ipynb`](encoder_heads_colab.ipynb) — учебный pipeline v2:
+120 WAC tiles (50 train / 39 val / 31 test), frozen SpaceLLaVA CLIP и исходный
+IBM backbone, linear/spatial heads × 3 seeds, val-selection, resume, sealed test.
+Переносимый комплект: `outputs/colab/encoder_heads_v2_colab.zip` + `.json`.
+Веса не включены; **новый GPU training/extraction ещё не проверен на T4**.
+Старые full-system notebooks и результаты не заменены. Подробности:
+[`linear_head_approach/README.md`](../linear_head_approach/README.md).
+
 ## Текущий IBM: полный clean-прогон 100 снимков / 400 ответов
 
 Обновлён **тот же** `ibm_val14_colab.ipynb`, но теперь он запускает full100/v2.

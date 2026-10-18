@@ -8,7 +8,7 @@ from .files import digest
 from . import settings as paths
 
 PROTOCOL = "planetary-model-service-v1"
-BACKENDS = {"spacellava": ("spacellava", "mock"), "ibm": ("ibm_imp",)}
+BACKENDS = {"spacellava": ("spacellava", "mock"), "ibm": ("ibm_imp",), "heads": ("frozen_crater",)}
 TERMINAL = {"completed", "cancelled", "interrupted", "blocked", "failed"}
 
 

@@ -14,7 +14,11 @@ class ServiceFixture:
         return {"fixture": True, "mode": "service_mock", "backend": self.backend}
 
     def predict(self, request):
-        if self.backend == "ibm_imp":
+        if self.backend == "frozen_crater":
+            import numpy as np
+            from .segmentation import save_crater_maps
+            raw = json.dumps(save_crater_maps(self.options["artifact_dir"], request.request_id, np.full((512, 512), -1, dtype=np.float32), .5))
+        elif self.backend == "ibm_imp":
             import numpy as np
             logits = np.zeros((2, 256, 256), dtype=np.float32)
             logits[0] = 1

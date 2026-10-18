@@ -103,8 +103,11 @@ def map_artifacts(raw, folder):
     artifacts = json.loads(raw)
     if Path(artifacts["map_directory"]).resolve() != (folder / "maps").resolve():
         raise ValueError("Segmentation maps must belong to this run")
-    if (artifacts["output_type"] != "imp_segmentation" or artifacts["classes"] != ["Background", "IMP"]
-        or artifacts["shape"] != [256, 256]
+    from planetary_vlm.heads_contract import CLASSES, TASK
+    imp = artifacts["output_type"] == "imp_segmentation" and artifacts["classes"] == ["Background", "IMP"] and artifacts["shape"] == [256, 256]
+    crater = (artifacts["output_type"] == TASK and artifacts["classes"] == CLASSES and artifacts["shape"] == [512, 512]
+              and artifacts.get("decision") == "sigmoid_ge_validation_threshold" and 0 < artifacts.get("threshold", 0) < 1)
+    if (not (imp or crater)
         or any(artifacts[key] not in artifacts["files_sha256"] for key in ("label_png", "arrays_npz"))):
         raise ValueError("Invalid segmentation artifact contract")
     verify_saved_maps(raw)
@@ -145,7 +148,7 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
         for row in prior:
             if row.request_id not in records or row.run_metadata["input_sha256"] != records[row.request_id]["input_sha256"]:
                 raise ValueError("Saved response input differs from prepared input")
-            if row.output_type == "imp_segmentation" and row.status == "ok":
+            if row.output_type in {"imp_segmentation", "catalog_crater_segmentation"} and row.status == "ok":
                 map_artifacts(row.raw_response, folder)
         done = {row.request_id for row in prior}
         export_predictions(engine, run)
@@ -156,9 +159,13 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
         pipeline_files = {name: file_hash(Path(__file__).with_name(name))
             for name in ("execution.py", "worker.py", "files.py", "preparation.py", "transforms.py",
                          "segmentation.py", "fixtures.py", "local_runtime.py")}
-        adapter_package = {"spacellava": "spacellava", "ibm_imp": "ibm"}.get(model.backend)
+        adapter_package = {"spacellava": "spacellava", "ibm_imp": "ibm", "frozen_crater": "heads"}.get(model.backend)
         if adapter_package:
             pipeline_files["adapter.py"] = file_hash(Path(__file__).resolve().parents[1] / adapter_package / "adapter.py")
+        if model.backend == "frozen_crater":
+            pipeline_files["heads_contract.py"] = file_hash(Path(__file__).resolve().parents[2] / "planetary_vlm/heads_contract.py")
+            for name in ("encoders.py", "heads.py", "common.py"):
+                pipeline_files[f"frozen/{name}"] = file_hash(Path(__file__).resolve().parents[3] / "linear_head_approach" / name)
         pipeline_hash = digest(pipeline_files)
         if metadata_path.exists():
             saved_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -197,7 +204,7 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
             random.seed(protocol["seed"])
             np.random.seed(protocol["seed"])
             options = {**model.options, "seed": protocol["seed"], "local_files_only": True}
-            if model.backend == "ibm_imp":
+            if model.backend in {"ibm_imp", "frozen_crater"}:
                 options["artifact_dir"] = str(folder / "maps")
             if mock_mode and model.backend != "mock":
                 from .fixtures import ServiceFixture
@@ -226,8 +233,11 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
                 response = adapter.predict(request)
                 if not isinstance(response, ModelResponse) or response.request_id != request.request_id:
                     raise ValueError("Invalid model response identity")
-                if model.backend == "ibm_imp" and response.status == "ok":
+                if model.backend in {"ibm_imp", "frozen_crater"} and response.status == "ok":
                     artifacts = map_artifacts(response.raw_response, folder)
+                    expected_type = "catalog_crater_segmentation" if model.backend == "frozen_crater" else "imp_segmentation"
+                    if artifacts["output_type"] != expected_type:
+                        raise ValueError("Adapter returned another task's map contract")
                 # Validate the entire adapter response before persisting it.
                 ModelResultCreate(model_config_id=model.id, dataset_config_id=dataset.id,
                     run_id=run.id, request_id=request.request_id, status=response.status,
@@ -243,7 +253,7 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
                 source_sample_id=source["source_sample_id"], scene_group_id=source["scene_group_id"],
                 source_split=source["source_split"], condition_id=source["condition_id"],
                 image_paths=list(request.image_paths), prompt=request.prompt,
-                output_type="imp_segmentation" if run.kind == "vit" else "text",
+                output_type=("catalog_crater_segmentation" if model.backend == "frozen_crater" else "imp_segmentation" if run.kind == "vit" else "text"),
                 status=response.status, raw_response=response.raw_response,
                 elapsed_seconds=response.elapsed_seconds, error_message=response.error_message,
                 artifacts=artifacts, run_metadata=source, mock=is_mock))

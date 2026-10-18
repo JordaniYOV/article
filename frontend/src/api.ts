@@ -50,6 +50,7 @@ export const api = {
   models: (signal?: AbortSignal) => all<Model>('/model-configs', signal),
   runs: (signal?: AbortSignal) => all<Run>('/runs', signal),
   defaults: () => request('/configurations/import-defaults', json()),
+  importHead: (value: unknown) => request<{ model_id: number; dataset_id: number; clean_only: boolean }>('/head-deployments', json(value)),
   upload: (file: File, metadata: DatasetMetadata) => {
     const body = new FormData(); body.append('file', file); body.append('metadata', JSON.stringify(metadata));
     return request<Dataset>('/datasets/upload', { method: 'POST', body });
@@ -61,7 +62,7 @@ export const api = {
   deleteDataset: (id: number) => request<void>(`/dataset-configs/${id}`, { method: 'DELETE' }),
   deleteModel: (id: number) => request<void>(`/model-configs/${id}`, { method: 'DELETE' }),
   start: (model: Model, datasetId: number, protocol: Protocol, reuseRunId?: string) =>
-    request<Run>(model.backend === 'ibm_imp' ? '/vit/runs' : '/vlm/runs', json({
+    request<Run>(['ibm_imp', 'frozen_crater'].includes(model.backend) ? '/vit/runs' : '/vlm/runs', json({
       model_name: model.name, model_version: model.version, dataset_id: datasetId,
       ...protocol, ...(reuseRunId ? { reuse_run_id: reuseRunId } : {}),
     })),

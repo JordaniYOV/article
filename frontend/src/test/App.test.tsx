@@ -6,7 +6,7 @@ import { api } from '../api';
 import { dataset, model, report, run } from './fixtures';
 
 vi.mock('../api', () => ({ assetUrl: (path: string) => '/api' + path,
-  api: Object.fromEntries(['health', 'datasets', 'builtins', 'ensureBuiltin', 'models', 'runs', 'defaults', 'upload', 'fromUrl', 'saveDataset', 'saveModel',
+  api: Object.fromEntries(['health', 'datasets', 'builtins', 'ensureBuiltin', 'models', 'runs', 'defaults', 'importHead', 'upload', 'fromUrl', 'saveDataset', 'saveModel',
     'deleteDataset', 'deleteModel', 'start', 'control', 'metrics', 'report', 'results', 'compare'].map((key) => [key, vi.fn()])) }));
 // Chart math/values are tested separately; jsdom has no browser layout engine.
 vi.mock('recharts', async () => {
@@ -27,6 +27,20 @@ beforeEach(() => {
 });
 
 describe('evaluation workspace', () => {
+  it('defaults trained crater heads to clean val with no questions or corruption controls', async () => {
+    const head = { ...model, backend: 'frozen_crater', name: 'IBM-spatial-13' };
+    const wac = { ...dataset, task_id: 'catalog_crater_segmentation', name: 'WAC_catalog_craters_heads', provenance: { split_counts: { val: 39, test: 31 } } };
+    vi.mocked(api.models).mockResolvedValue([head]);
+    vi.mocked(api.datasets).mockResolvedValue([wac]);
+    vi.mocked(api.start).mockResolvedValue(run);
+    const user = userEvent.setup(); render(<App />);
+    await screen.findByText('Бэкенд подключён');
+    await screen.findByText(/Только clean WAC catalog segmentation/);
+    expect(screen.queryByLabelText('Вопрос модели')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Комбинация всех четырёх')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Запустить сбор ответов' }));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith(head, wac.id, expect.objectContaining({ split: 'val', distortions: [], allowed_answers: [] }), undefined));
+  });
   it('always offers Mars and Moon even before any dataset is registered', async () => {
     vi.mocked(api.datasets).mockResolvedValue([]);
     render(<App />); await screen.findByText('Бэкенд подключён');

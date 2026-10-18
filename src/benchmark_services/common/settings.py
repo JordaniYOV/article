@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     dispatcher_enabled: bool = False
     spacellava_service_url: str = "http://127.0.0.1:8001"
     ibm_service_url: str = "http://127.0.0.1:8002"
+    heads_service_url: str = "http://127.0.0.1:8003"
     service_token: str = ""
     service_http_timeout: float = 5
     service_mock: bool = False

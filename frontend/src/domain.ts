@@ -41,6 +41,8 @@ export const METRICS = [
   { key: 'accuracy', name: 'Accuracy', hint: 'Точность ответов из заданного списка, включая ошибки и невалидные ответы в знаменателе.', unit: '' },
   { key: 'macro_f1', name: 'F1 score', hint: 'Среднее F1 по классам с разметкой.', unit: '' },
   { key: 'mean_iou', name: 'Mean IoU', hint: 'Среднее пересечение / объединение по классам сегментации.', unit: '' },
+  { key: 'crater_iou', name: 'Crater IoU', hint: 'IoU foreground-полигонов каталога: среднее внутри сцены, затем по сценам. Не IMP mean IoU.', unit: '' },
+  { key: 'crater_dice', name: 'Crater Dice', hint: 'Dice для publisher catalog crater polygons, scene-macro.', unit: '' },
   { key: 'dice', name: 'Dice · IMP', hint: 'Dice для класса IMP по успешным картам.', unit: '' },
   { key: 'pixel_accuracy', name: 'Pixel accuracy', hint: 'Точность классов на валидных пикселях успешных карт.', unit: '' },
   { key: 'coverage', name: 'Coverage', hint: 'Доля валидных текстовых ответов или успешно оценённых карт. Определение зависит от задачи.', unit: '' },

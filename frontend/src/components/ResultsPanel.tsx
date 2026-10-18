@@ -32,13 +32,13 @@ function MetricChart({ metricKey, reports, condition }: { metricKey: string; rep
 function MetricsTable({ reports }: { reports: Report[] }) {
   const rows = reports.flatMap((report) => Object.entries(report.metrics?.conditions || {}).map(([key, value]) => ({ report, key, value })));
   return <div className="table-box"><div className="table-title"><h3>Сводная таблица метрик</h3><button type="button" className="text-button" disabled={!rows.length} onClick={() => {
-    const header = ['Модель', 'Запуск', 'Тестовый', 'Условие', 'Accuracy', 'F1', 'Mean IoU', 'Dice IMP', 'Coverage', 'Время, с', 'Успешно', 'Всего'];
+    const header = ['Модель', 'Запуск', 'Тестовый', 'Условие', 'Accuracy', 'F1', 'Mean IoU', 'Dice IMP', 'Crater IoU', 'Crater Dice', 'Coverage', 'Время, с', 'Успешно', 'Всего'];
     const csv = [header, ...rows.map(({ report, key, value }) => [report.model.name, report.run_id, report.mock ? 'Да' : 'Нет', conditionLabel(key),
-      ...['accuracy', 'macro_f1', 'mean_iou', 'dice', 'coverage', 'mean_seconds'].map((metric) => metricValue(value, metric)), value.runtime.n_ok, value.runtime.n_expected])];
+      ...['accuracy', 'macro_f1', 'mean_iou', 'dice', 'crater_iou', 'crater_dice', 'coverage', 'mean_seconds'].map((metric) => metricValue(value, metric)), value.runtime.n_ok, value.runtime.n_expected])];
     saveFile('\uFEFF' + csv.map((row) => row.map(csvCell).join(';')).join('\r\n'), 'planetary-metrics.csv', 'text/csv;charset=utf-8');
-  }}><Download size={14} />CSV</button></div><div className="table-scroll"><table><thead><tr><th>Модель / условие</th><th>Accuracy</th><th>F1</th><th>Mean IoU</th><th>Dice · IMP</th><th title="Валидные ответы или успешно оценённые карты">Coverage</th><th>Время, с</th><th>Ответы</th></tr></thead>
+  }}><Download size={14} />CSV</button></div><div className="table-scroll"><table><thead><tr><th>Модель / условие</th><th>Accuracy</th><th>F1</th><th>Mean IoU</th><th>Dice · IMP</th><th>Crater IoU</th><th>Crater Dice</th><th title="Валидные ответы или успешно оценённые карты">Coverage</th><th>Время, с</th><th>Ответы</th></tr></thead>
     <tbody>{rows.length ? rows.map(({ report, key, value }) => <tr key={report.run_id + key}><td><span className="table-model"><i style={{ background: COLORS[reports.indexOf(report)] }} />{shortModel(report.model.name)}{report.mock && <span className="fixture-tag">Тест</span>}</span><small>{conditionLabel(key)}</small></td>
-      {['accuracy', 'macro_f1', 'mean_iou', 'dice', 'coverage', 'mean_seconds'].map((metric) => <td key={metric}>{fmt(metricValue(value, metric))}</td>)}<td>{value.runtime.n_ok} / {value.runtime.n_expected}</td></tr>) : <tr><td colSpan={8} className="no-table-data">Сохранённые метрики появятся после расчёта</td></tr>}</tbody></table></div></div>;
+      {['accuracy', 'macro_f1', 'mean_iou', 'dice', 'crater_iou', 'crater_dice', 'coverage', 'mean_seconds'].map((metric) => <td key={metric}>{fmt(metricValue(value, metric))}</td>)}<td>{value.runtime.n_ok} / {value.runtime.n_expected}</td></tr>) : <tr><td colSpan={10} className="no-table-data">Сохранённые метрики появятся после расчёта</td></tr>}</tbody></table></div></div>;
 }
 
 function ConditionCharts({ reports, selectedMetrics }: { reports: Report[]; selectedMetrics: string[] }) {
@@ -74,7 +74,8 @@ export default function ResultsPanel({ runs, models, activeId, setActiveId, seco
   useEffect(() => { if (conditions.length && !conditions.includes(condition)) setCondition(conditions[0]); }, [conditions.join('|'), condition]);
   useEffect(() => {
     const families = Object.values(report?.metrics?.conditions || {}).map((item) => item.metric_family);
-    if (families.includes('imp_segmentation')) setSelectedMetrics(['mean_iou', 'dice', 'coverage', 'mean_seconds']);
+    if (families.includes('catalog_crater_segmentation')) setSelectedMetrics(['crater_iou', 'crater_dice', 'coverage', 'mean_seconds']);
+    else if (families.includes('imp_segmentation')) setSelectedMetrics(['mean_iou', 'dice', 'coverage', 'mean_seconds']);
     else if (families.includes('closed_form_classification')) setSelectedMetrics(['accuracy', 'macro_f1', 'coverage', 'mean_seconds']);
   }, [report?.run_id, report?.metrics_status]);
   const rowConditions = active ? [...(active.protocol.include_clean ? ['clean'] : []), ...active.protocol.distortions.map((chain) => chain.join('+'))] : [];

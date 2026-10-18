@@ -5,7 +5,7 @@ import { model } from './fixtures';
 
 describe('FastAPI client', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
-  beforeEach(() => { fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 202 })); vi.stubGlobal('fetch', fetchMock); });
+  beforeEach(() => { fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { status: 202 })); vi.stubGlobal('fetch', fetchMock); });
   it('resolves exactly the selected planet and subset on the backend', async () => {
     await api.ensureBuiltin({ planet: 'moon', subset: 'height' });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/datasets/builtin/moon/ensure');
@@ -31,6 +31,14 @@ describe('FastAPI client', () => {
     await api.start({ ...model, name: 'NASA-IBM-Lunar-Foundation-Model', backend: 'ibm_imp' }, 3, initialProtocol, 'old-run');
     expect(fetchMock.mock.calls[0][0]).toBe('/api/vit/runs');
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).reuse_run_id).toBe('old-run');
+  });
+  it('imports a CLI deployment and sends a trained head to the mask endpoint, never training', async () => {
+    await api.importHead({ deployment_path: 'outputs/head/deployment.json', sha256: 'a'.repeat(64), name: 'head' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/head-deployments');
+    await api.start({ ...model, backend: 'frozen_crater' }, 3,
+      { ...initialProtocol, split: 'val', distortions: [], allowed_answers: [] });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/vit/runs');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/train'))).toBe(false);
   });
   it('uploads a ZIP as multipart without a manually fabricated content-type boundary', async () => {
     const file = new File(['fixture'], 'dataset.zip');

@@ -1,127 +1,150 @@
-# GPU runbook: frozen SpaceLLaVA and IBM WAC encoders
+# Windows 10 · RTX 3060 Ti 8 GiB · 16 GiB RAM
 
-Status: **prepared, not smoke tested** (30 September 2026). The current host
-has no NVIDIA GPU or model runtime. Run the commands below on the computer with
-the RTX 5070 Ti, **one encoder at a time**. A successful one-image smoke test
-is required before extracting 120 images. All paths below are relative to the
-repository root, and commands use PowerShell.
+Текущий способ: **обучение через CLI**, **benchmark через UI + FastAPI**.
+Новый Windows GPU smoke ещё НЕ выполнен. Не использовать Colab lock-файл для
+нативной Windows: в нём Linux-only Triton/NCCL/NVIDIA packages.
 
-## What produces the article result
+## 1. Окружение обучения и heads-worker
 
-The smoke test checks only whether one image passes through each frozen encoder
-and whether spatial feature tensors have the expected shapes. Its logs cannot
-support a quality claim. The experiment then uses **existing**
-`data_orbital/orbital_300_v3/` assets in this order:
-
-| Stage | Source in the curated collection | Use |
-|---|---|---|
-| Head fitting | 50 lunar WAC images and masks from `moon/train/` | Fit one separate head per frozen encoder |
-| Model selection | 39 lunar WAC images from publisher val | Select the mask threshold without test data |
-| Final evaluation | 31 lunar WAC images from publisher test | Compute per-image metrics and paired scene-group uncertainty |
-
-The 39 val and 31 test images are the selected WAC examples in
-`moon/segmentation/` and `moon/height/`; the latter receive crater masks from
-the publisher's COCO polygons. Elevation arrays are not encoder inputs. The
-remaining 180 images in `orbital_300_v3` are Mars or other lunar annotation
-tasks and cannot be added to this **single WAC crater** metric without new
-task-specific targets and a separate experimental track.
-
-## Transfer the exact input selection
-
-Transfer this working copy's `linear_head_approach/` folder, including its
-ignored `outputs/encoder_probe_wac_v1/` manifests, plus these data assets to
-the GPU computer:
-
-- `data_orbital/orbital_300_v3/moon/` (selected RGB tiles and source masks)
-- `data_orbital/encoder_probe_wac_v1/` (120 verified five-band TIFFs, derived masks, COCO indices)
-- `linear_head_approach/outputs/encoder_probe_wac_v1/` (separate input/target manifests and audit)
-
-Do not transfer or inspect `data_rover/`. On the GPU computer, rerun
-`python -m linear_head_approach.prepare` and verify `native_vis_verified_count=120`,
-`split_counts={train:50,val:39,test:31}`, and `unique_scene_groups=106`.
-This hashes all selected source images, masks, and native TIFFs.
-
-## Environment and selected weights
-
-Use Python 3.11 or 3.12. Install a CUDA-enabled PyTorch build that supports
-the GPU using the [official PyTorch installer](https://pytorch.org/get-started/locally/),
-then the pinned IBM package dependencies in a dedicated environment. Verify
-`torch.cuda.is_available()` before a model run. `external/ibm-lfm` must be the
-[official source](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model)
-at commit `d54c67aad513cb9daca444afa425cfb278e4fbf8`.
+Все команды ниже из корня проекта. Нужны Git, uv и совместимый NVIDIA driver.
+Для выбранного CUDA13-профиля NVIDIA указывает Windows10 **22H2**. Полный CUDA
+Toolkit/Visual Studio не требуется для использования готовых PyTorch wheels;
+если pip пытается собирать зависимости, остановись и сохрани log.
 
 ```powershell
-git clone https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model.git external/ibm-lfm
-git -C external/ibm-lfm checkout d54c67aad513cb9daca444afa425cfb278e4fbf8
-python -m venv .venv-encoder
-& .\.venv-encoder\Scripts\python.exe -m pip install --upgrade pip
-# Install CUDA PyTorch from the official selector before the next command.
-& .\.venv-encoder\Scripts\python.exe -m pip install -e .
-& .\.venv-encoder\Scripts\python.exe -m pip install -e external/ibm-lfm
-& .\.venv-encoder\Scripts\python.exe -m pip install "transformers>=4.49,<5" safetensors
-& .\.venv-encoder\Scripts\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-& .\.venv-encoder\Scripts\python.exe -m pip freeze > linear_head_approach/outputs/encoder_probe_wac_v1/gpu_requirements_freeze.txt
+py -m pip install --user uv
+# Открой новый терминал, если uv не появился в PATH.
+powershell -ExecutionPolicy Bypass -File linear_head_approach/setup_windows.ps1 -Install
+$headPython = '.\.venv-heads3060\Scripts\python.exe'
+& $headPython -B -m linear_head_approach doctor
+& $headPython -B -m unittest discover -s linear_head_approach/tests -v
 ```
 
-Download **only** the files used by these encoders. SpaceLLaVA's indexed
-visual tower has 391 tensors, all in shard 6; the other five 13B language-model
-shards are unnecessary. The SpaceLLaVA config fixes
-`mm_vision_select_layer=-2` and names CLIP-L/14@336. IBM uses its 2.43 GB
-backbone checkpoint and config. The `hf download` command is provided by
-`huggingface_hub` (installed via the IBM package dependencies). The revisions
-below were resolved on 30 September 2026.
+Installer создаёт только `.venv-heads3060`, устанавливает requirements и проект;
+не скачивает модели и не начинает обучение. Профиль Python3.12.14 x64.
+Фактически установленные версии сохраняются в
+`outputs/environments/heads3060_frozen.txt`; повторная установка использует этот
+lock, не выбирает новые transitive dependencies. Сохраняй lock вместе с runs.
+Runtime-код IBM, если его ещё нет (не веса/данные):
 
 ```powershell
-& .\.venv-encoder\Scripts\hf.exe download remyxai/SpaceLLaVA config.json preprocessor_config.json model.safetensors.index.json model-00006-of-00006.safetensors --revision 5a69f71bda9dea3e4d8113c1047c07fd3da483f8 --local-dir external/space-weights
-& .\.venv-encoder\Scripts\hf.exe download openai/clip-vit-large-patch14-336 config.json --revision ce19dc912ca5cd21c8a653c79e251e808ccabcd1 --local-dir external/clip-config
-& .\.venv-encoder\Scripts\hf.exe download nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model backbone/checkpoint.pt backbone/config.yaml --revision b657bdfe6fc4c0445d918f77a2d7b919805f3bce --local-dir external/ibm-weights
+& $headPython -B -m linear_head_approach runtime --allow-download
 ```
 
-The first extraction uses the **actual SpaceLLaVA tower tensors** from its
-shard, excluding the multimodal projector and LLM. The CLIP repository supplies
-only the architecture config. This avoids assuming that SpaceLLaVA's tower is
-identical to the public CLIP checkpoint.
+Существующий IBM runtime другой версии/с правками не сбрасывается автоматически.
 
-## Smoke tests, then feature extraction
+## 2. Данные, место и явная загрузка весов
+
+Используются уже выбранные `data_orbital/head_training_v2/`: 50 train / 39 val /
+31 test. Не скачивается полный датасет. Маски, RGB и native TIFF не меняются.
+Colab ZIP остаётся прежним зафиксированным артефактом; не распаковывай его код
+поверх нового Windows checkout. Если переносишь данные на другой компьютер,
+сохрани именно этот подкаталог с manifests/provenance и проверь `audit`.
 
 ```powershell
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.prepare
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.extract_features --encoder spacellava --model-dir external/space-weights --base-clip-dir external/clip-config --model-revision 5a69f71bda9dea3e4d8113c1047c07fd3da483f8 --output-dir linear_head_approach/outputs/encoder_probe_wac_v1/spacellava --limit 1
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.extract_features --encoder ibm --model-dir external/ibm-weights --ibm-source-dir external/ibm-lfm --model-revision b657bdfe6fc4c0445d918f77a2d7b919805f3bce --output-dir linear_head_approach/outputs/encoder_probe_wac_v1/ibm --limit 1
+& $headPython -B -m linear_head_approach audit
+# Запрашивают сеть/веса только эти явные команды:
+& $headPython -B -m linear_head_approach assets --encoder ibm --assets weights/encoder_heads --allow-download
+& $headPython -B -m linear_head_approach assets --encoder spacellava --assets weights/encoder_heads --allow-download
 ```
 
-Check that the SpaceLLaVA feature is 24×24×1024 and the IBM feature is
-64×64×768 (the final channel counts are smoke-test expectations, not confirmed
-runtime facts). Each run checks input hashes, records the checkpoint hash, and refuses an
-unexpected token count. If the smoke test fails, record the traceback, Python
-and package versions, GPU memory, and which encoder failed; do not launch the
-full extraction until the adapter is corrected.
+Скачиваются original IBM backbone и только один SpaceLLaVA shard с CLIP-тензорами
+(не полная LLM). Предварительно проверяются реальные remote sizes и свободное
+место на диске назначения: download bytes +2GiB reserve. Это **не гарантия**,
+что 18GiB хватит на чистую установку всего окружения. `pip --no-cache-dir`
+уменьшает дублирование; существующие системные pip/HF caches не удаляем.
+Можно указать `--assets D:/planetary_weights` и передать тот же путь дальше.
 
-After both smoke tests pass, rerun the same two extraction commands **without**
-`--limit 1`, one after the other. Each writes 120 `.npy` spatial feature maps
-and a checked `features.jsonl` in its output directory. No mask enters either
-extractor.
-
-## Train, freeze, and compare the heads
+## 3. Обучение через CLI
 
 ```powershell
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.fit_head fit --features linear_head_approach/outputs/encoder_probe_wac_v1/spacellava/features.jsonl --result-dir linear_head_approach/outputs/encoder_probe_wac_v1/spacellava/head
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.fit_head fit --features linear_head_approach/outputs/encoder_probe_wac_v1/ibm/features.jsonl --result-dir linear_head_approach/outputs/encoder_probe_wac_v1/ibm/head
+& $headPython -u -B -m linear_head_approach train --encoder ibm --resume
+& $headPython -u -B -m linear_head_approach train --encoder spacellava --resume
 ```
 
-Review both validation scores, feature widths, and head parameter counts.
-With the protocol fixed, score the sealed test split once:
+Каждая команда: audit → verify local assets → **2-image encoder smoke** → все
+признаки → synthetic head smoke → linear/spatial ×3seeds → validation.
+Веса автоматически не скачиваются. Test-метрики не вычисляются и не участвуют
+в выборе головы/threshold. `audit` проверяет целостность изображений и масок
+всех splits, включая test; это не оценка предсказаний на test.
+Отдельный дочерний процесс на каждую стадию освобождает VRAM после неё.
+Дефолтные paths: `outputs/heads_rtx3060ti_v1/{features,runs,logs}`.
+`--experiment outputs/my_new_run` меняет корень эксперимента; для продолжения
+передавай тот же путь. GPU batch encoder=1, головы=4, FP32. No AMP/quantization.
+TF32 выключен в extraction и inference. Bilinear head resize реализован через
+фиксированные separable matrices для deterministic CUDA backward.
+CLI и UI используют одну `.state/api-worker.lock`: параллельный GPU job закрыт.
+
+При нехватке VRAM остановиться и сохранить log, а не молча менять размер входа
+только одной модели. Параметры/seed/source splits прежние, смена GPU не создаёт
+новый научный метод. Старые Colab cache/run с другими fingerprints не resume:
+новый Windows эксперимент начинается в отдельном каталоге.
+
+Полезные независимые стадии доступны через `--help`; `fit --resume` хранит
+optimizer/scheduler/RNG после полной эпохи. Прерванная эпоха повторяется.
+Изменение кода/версий/данных блокирует reuse. Логи: консоль + `events.log` + logs/.
+
+## 4. Экспорт обученных голов для UI
+
+После успешного fit (пример одной spatial head; повторить для всех seeds/families):
 
 ```powershell
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.fit_head score-test --features linear_head_approach/outputs/encoder_probe_wac_v1/spacellava/features.jsonl --result-dir linear_head_approach/outputs/encoder_probe_wac_v1/spacellava/head
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.fit_head score-test --features linear_head_approach/outputs/encoder_probe_wac_v1/ibm/features.jsonl --result-dir linear_head_approach/outputs/encoder_probe_wac_v1/ibm/head
-& .\.venv-encoder\Scripts\python.exe -m linear_head_approach.compare --first-report linear_head_approach/outputs/encoder_probe_wac_v1/spacellava/head/test_report.json --second-report linear_head_approach/outputs/encoder_probe_wac_v1/ibm/head/test_report.json --output linear_head_approach/outputs/encoder_probe_wac_v1/paired_comparison.json
+& $headPython -B -m linear_head_approach publish --run outputs/heads_rtx3060ti_v1/runs/ibm/spatial/seed_13 --assets weights/encoder_heads --output outputs/head_deployments/ibm_spatial_13 --name IBM-spatial-13
+& $headPython -B -m linear_head_approach publish --run outputs/heads_rtx3060ti_v1/runs/spacellava/spatial/seed_13 --assets weights/encoder_heads --output outputs/head_deployments/clip_spatial_13 --name SpaceLLaVA-CLIP-spatial-13
 ```
 
-Send the two smoke-test logs, `audit.json`, both head metadata JSON files,
-both test reports, and the paired comparison JSON back for interpretation.
-Keep source TIFFs, weights, and feature arrays out of Git. The comparison
-measures frozen spatial-feature utility under a shared probe protocol; IBM's
-native five-channel input and SpaceLLaVA's RGB input remain a modality
-confound, and pretraining-scene overlap must be audited before an article-level
-claim.
+В каждой deployment-папке: immutable `head.pt`, input-only held-out index,
+`deployment.json` и **`import_in_ui.json`**. Export не обучает и не оценивает test.
+Threshold берётся из best.pt (выбран на val), не подбирается в API.
+Только свои checkpoints; не загружать .pt от неизвестного источника.
+
+## 5. FastAPI + worker + UI
+
+API остаётся отдельным лёгким окружением `.venv-api` из `requirements/api.txt`.
+Heads-worker использует **то же окружение**, что и обучение. Старые full-VLM/IMP
+сервисы для этого трека запускать не нужно. Если `.venv-api` ещё нет:
+
+```powershell
+uv venv --seed --python 3.12.14 .venv-api
+& .\.venv-api\Scripts\python.exe -m pip install --no-cache-dir -r requirements/api.txt
+& .\.venv-api\Scripts\python.exe -m pip install --no-deps -e .
+```
+
+В `.env` одинаковый непустой `PLANETARY_API_SERVICE_TOKEN` для API и worker;
+`PLANETARY_API_DISPATCHER_ENABLED=true`, heads URL `http://127.0.0.1:8003`.
+**Для реального benchmark**: `PLANETARY_API_SERVICE_MOCK=false`. Иначе будут
+явно помеченные synthetic fixture masks, не результаты обученной модели.
+
+В отдельных терминалах, из корня проекта:
+
+```powershell
+& .\.venv-api\Scripts\python.exe -m uvicorn --app-dir src api.main:app --host 127.0.0.1 --port 8000
+& .\.venv-heads3060\Scripts\python.exe -m uvicorn --app-dir src benchmark_services.heads.app:app --host 127.0.0.1 --port 8003
+```
+
+Третий терминал: `npm --prefix frontend run dev`.
+
+В UI перетащи `import_in_ui.json` в блок подключения **моделей**. Сервер
+проверит files/hashes и атомарно зарегистрирует модель + общую WAC-выборку.
+Потом выбрать модель, **подключённую WAC_catalog_craters_heads**, сначала `val`.
+Начать с 1–2 изображений. После фиксации протокола вручную выбрать `test`.
+Повторить ту же выборку на второй голове; сравнивать все3seeds, не лучший.
+
+Worker запускает **живой encoder + trained head**, не подставляет GT и не
+использует feature cache как предсказание. Измеренное время не включает загрузку
+модели, но включает encoder/head/map save. Raw masks/logits сохраняются на диск.
+API считает scene-macro **Crater IoU / Crater Dice** и показывает карты.
+Это не IMP mean IoU, не Q1–Q4 и не route/hazard benchmark.
+
+### Ограничения первого UI-трека
+
+- Только **clean lunar WAC** held-out scenes. Изображения train запрещены.
+- Искажения/Q1–Q4 заблокированы и UI, и сервером. Нельзя изменять только RGB,
+  оставляя native VIS IBM без искажения: это несопоставимые условия.
+- IBM native VIS5 vs CLIP RGB — не equal-information. Передача обеих модальностей
+  в request документирована, но CLIP использует только RGB. Нет доказательства
+  независимости от pretraining или полноты каталожной crater-разметки.
+- Новые Windows encoder/head GPU jobs ещё не проверены. CPU/mock tests — только
+  software checks; не основание обещать вместимость IBM FP32 в8GiB.
+
+Источник совместимости ОС: [NVIDIA CUDA13 Windows guide](https://docs.nvidia.com/cuda/archive/13.0.1/cuda-installation-guide-microsoft-windows/index.html#system-requirements).

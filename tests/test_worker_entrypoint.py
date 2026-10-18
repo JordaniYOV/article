@@ -17,13 +17,13 @@ class WorkerEntrypointTests(unittest.TestCase):
         self.assertIn("--mock", result.stdout)
 
     def test_both_direct_files_work_without_editable_install(self):
-        for service in ("spacellava", "ibm"):
+        for service in ("spacellava", "ibm", "heads"):
             with self.subTest(service=service):
                 worker = ROOT / "src" / "benchmark_services" / service / "worker.py"
                 self.check_help([sys.executable, "-I", "-S", str(worker), "--help"])
 
     def test_both_canonical_modules_have_selected_job_entrypoints(self):
-        for service in ("spacellava", "ibm"):
+        for service in ("spacellava", "ibm", "heads"):
             module = f"benchmark_services.{service}.worker"
             bootstrap = (f"import runpy,sys; sys.path.insert(0, {str(ROOT / 'src')!r}); "
                 f"sys.argv=[{module!r}, '--help']; runpy.run_module({module!r}, run_name='__main__')")

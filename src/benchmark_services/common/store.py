@@ -133,7 +133,7 @@ class ModelResultCreate(Schema):
     source_split: Literal["train", "val", "test"] | None = None
     image_paths: list[str] = Field(default_factory=list)
     prompt: str = ""
-    output_type: Literal["text", "imp_segmentation"] = "text"
+    output_type: Literal["text", "imp_segmentation", "catalog_crater_segmentation"] = "text"
     status: Literal["ok", "error", "unsupported"]
     raw_response: str = ""
     elapsed_seconds: float = Field(ge=0)
@@ -300,3 +300,11 @@ class ComparisonCreate(Schema):
         if values[0] == values[1]:
             raise ValueError("Choose two different runs")
         return values
+
+
+class HeadDeploymentImport(Schema):
+    deployment_path: Text
+    sha256: Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{64}$")]
+    name: Name
+    version: Name = "v1"
+    kind: Literal["frozen_crater_deployment"] = "frozen_crater_deployment"

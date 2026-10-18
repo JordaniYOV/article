@@ -15,7 +15,7 @@
 `data_rover/` исключён из текущего исследования и защищён: запрещено читать,
 использовать, копировать, перемещать, переименовывать, менять или удалять его
 содержимое и сам каталог. Работа с данными ведётся только в `data_orbital/`.
-Основной планируемый опыт теперь сравнивает **замороженные визуальные энкодеры**
+В отдельном supporting-протоколе сравниваем **замороженные визуальные энкодеры**
 [`remyxai/SpaceLLaVA`](https://huggingface.co/remyxai/SpaceLLaVA) и
 [`NASA–IBM Lunar Foundation Model`](https://huggingface.co/nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model)
 с отдельно обучаемыми пространственными головами одного типа. Первый пилот
@@ -23,8 +23,15 @@
 [`linear_head_approach/protocol.md`](linear_head_approach/protocol.md). Сравнение
 полных систем и вопросы E1–E5 остаются отдельным анализом в
 [`docs/protocols/orbital_study.md`](docs/protocols/orbital_study.md).
-Команды для отдельного компьютера с RTX 5070 Ti находятся в
+Текущий локальный target — **Windows10 / RTX3060Ti 8GiB / RAM16GiB**.
+Обучение голов через CLI, benchmark через UI/FastAPI и heads-service на8003.
+Установка, smoke, resume и экспорт модели описаны в
 [`linear_head_approach/gpu_runbook.md`](linear_head_approach/gpu_runbook.md).
+Прежний учебный Colab notebook (отдельный зафиксированный комплект):
+[`encoder_heads_colab.ipynb`](notebooks/encoder_heads_colab.ipynb). Линейная и
+spatial головы обучаются отдельно для каждого frozen encoder; прежний код
+сохранён в восстановимом архиве. Это supporting probe, не замена primary
+full-system протокола из `research_plan.md`. Новый GPU-запуск ещё не проверен.
 Веса не загружены, GPU-запуск не проверен. Разделы ниже описывают также прежний
 rover-каркас.
 

@@ -62,3 +62,38 @@ def verify_saved_maps(raw_response):
         path = (root / name).resolve()
         if not path.is_relative_to(root) or not path.is_file() or file_hash(path) != digest:
             raise ValueError("Resume rejected: a saved IBM map is missing or changed")
+
+
+def save_crater_maps(directory, request_id, logits, threshold):
+    """Native-size binary catalog map; val threshold is never replaced by argmax."""
+    import numpy as np
+    from PIL import Image
+    from planetary_vlm.heads_contract import CLASSES, TASK
+    logits = np.asarray(logits, dtype=np.float32)
+    if logits.shape != (512, 512) or not np.isfinite(logits).all() or not 0 < threshold < 1:
+        raise ValueError("Expected finite 512x512 crater logits and a val-selected threshold")
+    probability = np.empty_like(logits)
+    positive = logits >= 0
+    probability[positive] = 1 / (1 + np.exp(-logits[positive]))
+    exponent = np.exp(logits[~positive])
+    probability[~positive] = exponent / (1 + exponent)
+    labels = (probability >= threshold).astype(np.uint8)
+    arrays, png = BytesIO(), BytesIO()
+    np.savez_compressed(arrays, logits=logits, probabilities=probability)
+    # Palette changes display colors, not stored 0/1 class IDs read by NumPy.
+    displayed = Image.fromarray(labels).convert("P")
+    displayed.putpalette([16, 20, 33, 250, 250, 255] + [0] * 762)
+    displayed.save(png, format="PNG")
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    name, files = hashlib.sha256(request_id.encode()).hexdigest(), {}
+    for suffix, content in ((".npz", arrays.getvalue()), (".png", png.getvalue())):
+        path = directory / (name + suffix)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_bytes(content)
+        os.replace(temporary, path)
+        files[path.name] = hashlib.sha256(content).hexdigest()
+    return {"output_type": TASK, "classes": CLASSES, "shape": [512, 512],
+            "decision": "sigmoid_ge_validation_threshold", "threshold": threshold,
+            "map_directory": str(directory.resolve()), "files_sha256": files,
+            "label_png": name + ".png", "arrays_npz": name + ".npz"}

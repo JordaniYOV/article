@@ -43,11 +43,20 @@ def expected_requests(run):
             raise ValueError("Source image changed; resume refused")
         for condition, chain in variants(run.protocol):
             request_id = digest([source["sample_id"], condition])
+            modalities = ()
+            from planetary_vlm.heads_contract import TASK
+            if run.protocol["task_id"] == TASK:
+                native = paths.orbital_path(source["native_vis"])
+                if file_hash(native) != source["native_vis_sha256"]:
+                    raise ValueError("Paired native VIS input changed")
+                modalities = (("vis", str(native)),)
             requests.append(ModelRequest(request_id, (str(folder / "images" / (request_id + ".png")),),
                 run.protocol["prompt"], tuple(run.protocol["allowed_answers"]),
-                max_new_tokens=run.protocol["max_new_tokens"]))
+                max_new_tokens=run.protocol["max_new_tokens"], modality_paths=modalities))
             records[request_id] = {"source_sample_id": source["sample_id"], "scene_group_id": source["scene_group_id"],
                 "source_split": source["source_split"], "condition_id": condition, "chain": chain}
+            if modalities:
+                records[request_id]["vis_sha256"] = source["native_vis_sha256"]
     return requests, records
 
 

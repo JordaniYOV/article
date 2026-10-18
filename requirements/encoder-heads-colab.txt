@@ -1,0 +1,4 @@
+# Python 3.12, Linux. Reuse the exact dependency set of the successful IBM T4
+# inference run; NEW encoder extraction/training still needs its own smoke.
+# First install torch/torchvision using the official cu130 extra index.
+-r ibm-val14-colab-lock.txt

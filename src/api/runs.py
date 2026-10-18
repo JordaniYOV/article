@@ -17,7 +17,7 @@ from .logging import get_logger
 
 LOGGER = get_logger("api.runs")
 
-KINDS = {"vlm": {"spacellava", "mock"}, "vit": {"ibm_imp"}}
+KINDS = {"vlm": {"spacellava", "mock"}, "vit": {"ibm_imp", "frozen_crater"}}
 TERMINAL = {"completed", "cancelled", "interrupted", "blocked", "failed"}
 
 
@@ -66,7 +66,24 @@ def create_run(payload, kind, session):
             if other.dataset_config_id != dataset.id or other.protocol_sha256 != protocol_hash:
                 raise ValueError("Reuse requires the same dataset, split, count, seed, prompt and distortion protocol")
             selected = other.samples
-        if kind == "vit":
+        if model.backend == "frozen_crater":
+            from planetary_vlm.heads_contract import TASK, INPUT_PROTOCOL, read_deployment, pixel_hash
+            if (dataset.task_id != TASK or dataset.planet != "moon" or dataset.preprocessing.get("input_protocol") != INPUT_PROTOCOL
+                or model.options.get("input_protocol") != INPUT_PROTOCOL or payload.distortions or not payload.include_clean or payload.allowed_answers):
+                raise ValueError("Trained heads require clean WAC catalog segmentation, no questions/corruptions; native VIS5 and RGB differ")
+            deployment_path, deployment = read_deployment(model.options["deployment_path"], model.options["deployment_sha256"], paths.WORKSPACE_ROOT)
+            from pathlib import Path
+            # Deployment index is in outputs, not a dataset manifest. It contains inputs only.
+            import json
+            index_path = deployment_path.parent / "encoder_inputs.jsonl"
+            admitted = {r["sample_id"]: r for r in map(json.loads, index_path.read_text(encoding="utf-8").splitlines()) if r}
+            for row in selected:
+                known = admitted.get(row["sample_id"])
+                if not known or known["split"] != payload.split or known["scene_group_id"] != row["scene_group_id"]:
+                    raise ValueError("Head dataset must preserve admitted held-out IDs/groups/splits")
+                if pixel_hash(row["image"]) != known["rgb_pixels_sha256"] or row.get("native_vis_sha256") != known["native_vis_sha256"]:
+                    raise ValueError("Head source image/native VIS differs from the deployment")
+        elif kind == "vit":
             expected = "curated_imp_png_reflectance_0_0.12_v1"
             if (dataset.planet != "moon" or dataset.task_id != "imp_segmentation"
                 or dataset.preprocessing.get("input_protocol") != expected

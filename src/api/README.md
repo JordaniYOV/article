@@ -1,5 +1,26 @@
 # API оценки моделей
 
+## Новый локальный heads-трек: Windows / RTX3060Ti
+
+Обучение выполняется **только через CLI**, API не запускает train.
+`linear_head_approach publish` создаёт `import_in_ui.json` — его можно перетащить
+в UI-блок моделей. `POST /head-deployments` проверяет server-local deployment и
+атомарно регистрирует backend `frozen_crater` + WAC catalog validation/test.
+Новый приватный `benchmark_services.heads.app` на8003 использует обучение-venv
+`.venv-heads3060`; публичный API остаётся без Torch в `.venv-api`.
+Общая GPU-блокировка не допускает одновременный CLI train и UI inference.
+
+Первый трек: **clean lunar WAC catalog crater segmentation**, живой frozen
+encoder + trained head, не Q1–Q4/IMP и не cached features вместо inference.
+Worker получает RGB и paired native VIS, никогда masks/targets; CLIP использует
+RGB, IBM native VIS5. Разные входные сведения указаны как ограничение.
+Сервер блокирует train scenes, вопросы и искажения для этого трека. Карты512²
+хранят raw class IDs0/1 с PNG palette; scoring — scene-macro Crater IoU/Dice.
+`PLANETARY_API_SERVICE_MOCK=false` нужен для реальных моделей. Mock карты —
+только software checks. Старые IMP/VLM пути ниже остаются отдельными.
+
+Полные команды: [Windows/3060Ti runbook](../../linear_head_approach/gpu_runbook.md).
+
 Один запуск — одна модель, один датасет, фиксированная выборка снимков и выбранные
 цепочки искажений. Два изолированных сервиса получают ответы последовательно. API возвращает
 прогресс, результаты и JSON отчёта с таблицами и данными для графиков будущего сайта.

@@ -1,127 +1,105 @@
-# Frozen encoder probe on orbital crater imagery
+# Frozen crater heads v2 — protocol
 
-Status: input preparation and admission audit, 30 September 2026. All 120
-selected native WAC rasters have passed the recorded source SHA-256 checks.
-All 120 decoded TIFFs have shape 512×512×5 on the preparation host.
-No encoder weights have been loaded and no head has been trained. As of the
-12 October 2026 revision of `research_plan.md`, this is an **optional supporting
-experiment**, not the primary research design. The complete-system benchmark
-is primary. Prepared assets and this probe contract are retained; running or
-training the probe requires a separate task.
+Роль: supporting feature-utility experiment. Основной `research_plan.md` не меняется.
+Это не обещание оптимальной головы: небольшой baseline + predeclared ablation,
+который можно воспроизвести на ограниченной памяти.
 
-## Research claim
+## Data and target
 
-The experiment measures the utility of frozen spatial visual features for a
-specified downstream task under a fixed probe protocol. It does not measure
-the full SpaceLLaVA's language reasoning, and a score difference alone cannot
-isolate the causal effect of lunar pretraining because architecture, training
-corpus and native input modalities differ. The Remyx configuration names
-`openai/clip-vit-large-patch14-336` as its vision tower and sets
-`unfreeze_mm_vision_tower=false`. The actual tower tensors must be compared
-with the corresponding base CLIP revision before describing it as unchanged.
-The checkpoint index locates all 391 visual-tower tensors in shard 6, so the
-prepared extractor targets the **SpaceLLaVA visual tower itself** and excludes
-the language model and multimodal projector. Its loading and outputs still need
-a GPU smoke test.
+Источник: [SomBench WAC crater detection](https://huggingface.co/datasets/nasa-ibm-ai4science/Sombench-WAC-Crater-Detection),
+revision `20f800becb64a0c7ad314652a683f97f0281fe67`, source card license claim CC-BY-4.0.
+Полная атрибуция, исходная выборка и hashes в `data_orbital/head_training_v2/provenance.json`.
+120 ранее отобранных WAC изображений 512×512. Publisher polygon masks сохранены
+побайтно; 50 дополнительных масок ранее rasterized из pinned publisher COCO.
+Сейчас никакой новой ручной разметки и никакой подмены изображения не производится.
 
-Sources: [SpaceLLaVA config](https://huggingface.co/remyxai/SpaceLLaVA/blob/main/config.json),
-[IBM LFM card](https://huggingface.co/nasa-ibm-ai4science/NASA-IBM-Lunar-Foundation-Model).
+50 train / 39 val / 31 source-test; 36/39/31 записанных scene groups. Это не
+гарантия отсутствия spatial overlap разных scene IDs — geographic footprint
+аудит и pretraining-provenance аудит остаются ограничениями. Не объявлять set
+независимым от pretraining IBM, использующего lunar corpora.
 
-## Initial task and assets
+`inputs.jsonl` не содержит targets/masks/height/answers. `targets.jsonl` — отдельный
+контракт для loss, evaluator и проверки целостности файлов в audit. Входные изображения и маски разделены
+логически, а не как security boundary: оператор имеет доступ к обеим папкам.
+Все assets проходят SHA-256; неизвестные семантические классы блокируют сборку.
 
-Use the selected SomBench WAC crater catalog polygons as a binary spatial
-target. The active collection has 50 publisher-train images from
-`data_orbital/orbital_300_v3/moon/train/`, 39 publisher-val images and 31
-publisher-test images. The two heads are trained **only** on the 50 train
-images and their crater masks. The val/test set combines 20 selected WAC
-segmentation tiles with 50 distinct WAC elevation-track tiles. Publisher COCO
-polygons are rasterized for the latter; the elevation maps are never used as
-image-only inputs. Every image has a source scene/product group and image/mask
-hashes. `linear_head_approach.prepare` checks these assets and writes
-separate model-visible input and target manifests beneath
-`linear_head_approach/outputs/encoder_probe_wac_v1/`. The input manifest contains no mask or answer.
-Elevation arrays are not inputs for this image-only probe.
+## Encoders
 
-Preparation command (using the project's Python environment):
+**SpaceLLaVA:** `remyxai/SpaceLLaVA`, revision
+`5a69f71bda9dea3e4d8113c1047c07fd3da483f8`; actual 391 vision-tower tensors из
+`model-00006-of-00006.safetensors`. CLIP ViT-L/14-336 architecture config revision
+`ce19dc912ca5cd21c8a653c79e251e808ccabcd1`; hidden layer -2, CLS excluded.
+RGB square 512→official 336 processor, native spatial feature grid 24×24×1024.
+Мультимодальный projector и LLM исключены. Tower vs original CLIP equality не
+проверена; Remyx SpaceLLaVA не является OSUPCVLab LLaVA-LE.
 
-```powershell
-& .\.venv-benchmark\Scripts\python.exe -m linear_head_approach.prepare
-```
+**IBM:** original `NASA-IBM-Lunar-Foundation-Model` revision
+`b657bdfe6fc4c0445d918f77a2d7b919805f3bce`, backbone checkpoint/config known hashes.
+Не NAC crater-finetuned detector. Runtime revision
+`d54c67aad513cb9daca444afa425cfb278e4fbf8`, официальный `LunarBackbone`, VIS5,
+512×512, patch8, block11, official per-band means/std, 64×64×768→bilinear24×24.
+Недостающие активные checkpoint parameters запрещены (никаких silent random weights).
 
-`linear_head_approach.acquire_wac` retrieves only selected native WAC
-TIFFs from the pinned revision and checks each against the source-raster hash.
-It writes `data_orbital/encoder_probe_wac_v1/native_vis/selected_rasters.jsonl`.
-Do not use the COCO annotation files as model inputs. After feature extractors
-are smoke tested, each extractor should write a `features.jsonl` with exactly
-one row per probe sample: `sample_id`, `split`, `scene_group_id`,
-`rgb_image_sha256`, `feature`, `feature_sha256`, `extractor_id`,
-`model_revision`, and `preprocessing_id`. Each `feature` must be a finite
-H×W×C NumPy array under `linear_head_approach/outputs/`, using spatial encoder tokens before any
-task head. The shared ridge probe in `linear_head_approach.fit_head` fits
-on train and selects its threshold on val; a separate `score-test` action opens
-test masks only after fitting. Its synthetic unit test is a software check,
-not a scientific model result. After both test reports exist,
-`linear_head_approach.compare` computes the **paired** per-image IoU
-difference with scene-group bootstrap intervals; separate confidence intervals
-for each model are insufficient to assess their difference.
+Оба encoder FP32, eval, requires_grad=False, inference_mode, batch1. Отдельные
+процессы. Нет автоматического OOM fallback, quantization или смены input size.
+Кэш float32 CHW24×24, incremental atomic per-image save; resume проверяет code,
+environment, input hashes, model hashes и preprocessing. Перед full extraction
+нужен smoke двух разных изображений с текущим session ID, проверка конечности,
+различия features и повторяемости при повторном вызове.
 
-For CLIP, record the layer specified by SpaceLLaVA's
-`mm_vision_select_layer=-2`, remove its class token and verify the resulting
-patch grid. For IBM, use the official TerraTorch backbone with `vis` only,
-record the selected encoder block and patch size, and remove register tokens
-using the upstream interface before reshaping spatial features. The published
-WAC crater configuration uses 512×512 input, patch size 8, and a 64×64 token
-grid; its selected backbone indices are `[2, 5, 8, 11]`. A first protocol
-choice is the final encoder block (`11`) for IBM and `-2` for CLIP, with a
-layer-matched sensitivity analysis if resources allow. Refuse any unexpected
-token count rather than guessing grid dimensions.
+**Сравнение native-input**, не equal-information: IBM5band vs CLIP RGB. Изменение
+общей сетки или modalities — отдельный protocol/run, не patch после просмотра test.
 
-For IBM's native WAC arm, follow the exact WAC data adapter: read the five-band
-TIFF as float32, replace NaNs with zero, resize each channel to 512×512 using
-PIL bilinear interpolation, then normalize with means
-`[0.018106, 0.025262, 0.027113, 0.028616, 0.030757]` and standard deviations
-`[0.010051, 0.013646, 0.014491, 0.015267, 0.016555]`. Record the upstream
-source commit and checkpoint hash. This is based on the
-[published WAC configuration](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model/blob/main/terratorch_integration/configs/wac_craters/full_data/ni_lfm_ps8_frozen.yaml)
-and [data adapter](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model/blob/main/terratorch_integration/data_adapter.py),
-not the repository's generic example settings. Check these operations with a
-one-image smoke test before full feature extraction.
+## Heads and training
 
-The existing three-channel PNGs are rendered from bands 0–2 with a per-tile
-percentile stretch. They are suitable for the CLIP arm. IBM's published WAC
-`vis` tokenizer expects five bands. Recover only the selected source WAC rasters
-at the pinned revision and verify their SHA-256 against the original raster
-hashes in the input manifest. Do not duplicate RGB channels or substitute
-height maps. Confirm the exact official IBM preprocessing and feature tensor
-with a one-image smoke test. Run the CLIP tower smoke test separately.
+Predeclared families: linear 1×1 и spatial 1×1→64/GN/GELU→3×3/GN/GELU→1×1.
+Одинаковый topology/budget, не одинаковое число parameters; все counts публикуются.
+Признаки channel-standardized по train pixels only. Encoder не загружается в
+training process. По умолчанию нет feature-space augmentation: flip features не
+эквивалентен повторному encoding перевёрнутого изображения с positional embeddings.
 
-## Comparison contract
+AdamW lr1e-3, wd.01, batch4, cosine schedule max80 epochs, patience12,
+gradient norm clip1. FP32, deterministic algorithms, фиксированные seeds13/37/73.
+Каждый снимок weight ∝1/число train tiles той же source group.
+Loss на128²: positive-weight BCE + .5 soft Dice. Positive weight считается train-only,
+с учётом групп и cap10. Маски area-downsampled: сохраняется fractional coverage,
+не используется nearest с потерей всех маленьких polygons. Нет test-derived weights.
 
-1. Extract spatial tokens **before any task head** with both encoders frozen.
-   Pin checkpoint and processor revisions, feature layer, image transform,
-   numeric precision, and feature-grid geometry. Check whether the SpaceLLaVA
-   tower differs from base CLIP. No LLM output enters the probe.
-2. Fit the same simple spatial head family to each feature set using only
-   publisher-train images. Predefine feature normalization, class weighting,
-   regularization, interpolation and a common 24×24 output grid. The feature widths
-   differ, so report trainable parameter counts and include a capacity-matched
-   sensitivity analysis if needed.
-3. Select any head hyperparameters and mask threshold with publisher-val only.
-   Freeze the entire rule before opening publisher-test predictions. Keep
-   `scene_group_id` intact and audit geographic and pretraining overlap.
-4. Report per-image crater IoU and Dice, an all-foreground baseline, failure
-   examples, and uncertainty grouped by product/scene. Do not treat individual
-   pixels as independent samples. Report train, val and test separately.
+Windows/RTX3060Ti update: IEEE FP32, TF32 disabled in both extraction/inference,
+strict deterministic algorithms. Head bilinear upsampling is implemented by fixed
+separable matrices (same align_corners=False geometry), not CUDA interpolate backward:
+the latter is [documented as nondeterministic](https://docs.pytorch.org/docs/2.12/generated/torch.use_deterministic_algorithms.html).
+No silent warn_only fallback. CPU equivalence/backward tests and GPU smoke are separate.
 
-The 31 selected test images permit a preliminary grouped estimate, but a
-stable article-level ranking requires uncertainty analysis, model-training
-membership audit and preferably a larger independent WAC test set or an
-independent NAC replication. Native five-band IBM input versus three-band CLIP
-input also changes information available to each model. Report this explicitly
-as a native-modality comparison; a strict same-information encoder claim needs
-a validated shared-input protocol. The existing IBM crater-detection head is
-not part of this frozen-encoder probe.
+Validation на512²: fixed thresholds .2,.3,.4,.5,.6,.7,.8, выбор максимального
+scene-macro IoU. При равенстве — меньший threshold, затем более ранняя эпоха.
+Это совместный val-подбор порога и эпохи в заранее фиксированном бюджете, не
+независимая оценка качества. Для test используется best.pt и сохранённый threshold.
 
-Mars MMLSv2 train masks and the selected Mars segmentation evaluation masks
-have different label semantics. They are not pooled into this crater task.
-The route and measured-geometry experiments remain gated on appropriate truth.
+## Resume and reporting
+
+`last.pt`: head, optimizer, scheduler, shuffle generator, Python/NumPy/CPU/CUDA RNG,
+history, wait counter, epoch, identity. Запись atomic rename на том же filesystem.
+Сохраняется после полной эпохи; прерванная эпоха повторяется из предыдущего состояния.
+Exact identity mismatch закрывает resume. Нельзя загружать сторонние untrusted .pt:
+checkpoints содержат Python RNG objects и читаются weights_only=False.
+
+CLI-оценка test закрыта отдельным `--allow-test`; notebook требует завершить обе
+модели до оценки. UI запускает test только при явном выборе этого split после
+экспорта фиксированной головы. Audit проверяет целостность всех splits, включая
+test; это не оценка предсказаний. Test не используется для выбора головы, seed,
+эпохи, normalization или threshold.
+Основной metric: среднее per-image IoU внутри группы, затем mean по source groups.
+Дополнительно Dice, image-macro IoU, all-foreground/all-background baseline.
+При empty prediction+GT IoU/Dice=1; пустые GT помечены в per-image records.
+Не сворачивать все pixels в один pooled IoU как единственный показатель.
+
+Парное сравнение: одна и та же семья, seeds и sample/group IDs. Сначала среднее по
+seeds для каждого изображения, затем paired scene-group bootstrap2000, seed2026.
+CI отражает сценовую неопределённость при выбранных seeds, не всю training variance;
+seed-specific metrics сохраняются отдельно. Нельзя выбрать только лучший seed.
+
+Каталожная маска — объединённые polygons, не отдельные instances. Нельзя из этой
+маски корректно получить число кратеров или Q2–Q4 instance relations без нового
+контракта. Crater mask не depth/height и не физическая hazard/cost map. Route planning
+требует отдельной постановки и GT. Не представлять software smoke как научный результат.

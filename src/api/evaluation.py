@@ -25,7 +25,7 @@ from benchmark_services.common.transforms import apply_chain, variants
 from benchmark_services.common.preparation import renderer_provenance, load_bundle
 
 METHOD = "orbital-api-metrics-v2"
-METRICS = {"closed_form_classification": "accuracy", "imp_segmentation": "mean_iou"}
+METRICS = {"closed_form_classification": "accuracy", "imp_segmentation": "mean_iou", "catalog_crater_segmentation": "crater_iou"}
 
 
 def run_is_mock(run, model):
@@ -165,7 +165,7 @@ def _verify_inputs(run, dataset, results):
     if len({row.request_id for row in results}) != len(results) or {row.request_id for row in results} != set(expected):
         raise ValueError("Responses must exactly match prepared request IDs")
     output_types = {row.output_type for row in results}
-    if len(output_types) != 1 or not output_types <= {"text", "imp_segmentation"}:
+    if len(output_types) != 1 or not output_types <= {"text", "imp_segmentation", "catalog_crater_segmentation"}:
         raise ValueError("A run must contain one declared supported output contract")
     for row in results:
         request = expected[row.request_id]
@@ -230,6 +230,8 @@ def calculate(session, run_id):
         sources, output_type = _verify_inputs(run, dataset, results)
         if output_type == "imp_segmentation" and run.protocol["task_id"] != "imp_segmentation":
             raise ValueError("Native IMP masks cannot answer crater or other closed-form questions")
+        if output_type == "catalog_crater_segmentation" and run.protocol["task_id"] != output_type:
+            raise ValueError("Catalog crater maps cannot answer closed-form questions or IMP tasks")
         conditions, scored_rows, per_request = {}, [], []
         for condition, chain in variants(run.protocol):
             selected = [row for row in results if row.condition_id == condition]
@@ -244,7 +246,13 @@ def calculate(session, run_id):
                 "median_seconds": median(timing) if timing else None,
                 "timing_population": "successful requests, initialization excluded"}
             reference = None
-            if output_type == "imp_segmentation":
+            if output_type == "catalog_crater_segmentation":
+                from .heads import score_maps
+                quality = score_maps(selected, sources, run, chain)
+                family = output_type
+                ready = sum(s.get("reference_status") == READY for s in sources.values())
+                reference = {"n_expected": len(selected), "n_reference_ready": ready, "n_unscored_reference": len(selected) - ready}
+            elif output_type == "imp_segmentation":
                 quality = segmentation(selected, sources, run, chain)
                 family = "imp_segmentation"
                 ready = sum(bool(s.get("mask")) and reference_status(s, has_reference=True)[0] == READY
@@ -263,7 +271,7 @@ def calculate(session, run_id):
                 quality, family = None, None
             available = quality is not None and quality.get(METRICS.get(family)) is not None
             partial = available and ((reference is not None and reference["n_unscored_reference"] > 0)
-                or (family == "imp_segmentation" and
+                or (family in {"imp_segmentation", "catalog_crater_segmentation"} and
                     (quality["prediction_coverage"] < 1 or quality["reference_coverage"] < 1)))
             conditions[condition] = {"runtime": runtime, "quality": quality,
                 "reference": reference, "metric_family": family,
@@ -357,7 +365,7 @@ def compare(session, run_ids):
         metric = METRICS.get(family)
         x, y = (item["quality"].get(metric) if item["quality"] else None for item in (a, b))
         reason = None
-        if valid and family == "imp_segmentation":
+        if valid and family in {"imp_segmentation", "catalog_crater_segmentation"}:
             valid = (a["quality"] is not None and b["quality"] is not None
                 and a["quality"]["prediction_coverage"] == b["quality"]["prediction_coverage"] == 1
                 and a["quality"]["reference_coverage"] == b["quality"]["reference_coverage"] == 1
@@ -375,6 +383,12 @@ def compare(session, run_ids):
                 contrast["paired_interval"] = paired_accuracy_bootstrap(*paired, seed=left.protocol["seed"])
             except (ValueError, KeyError) as error:
                 raise HTTPException(422, f"Incompatible scoring cohorts: {error}") from error
+        elif contrast["comparable"] and family == "catalog_crater_segmentation":
+            from .heads import paired_scene_interval
+            try:
+                contrast["paired_interval"] = paired_scene_interval(a["quality"]["per_image"], b["quality"]["per_image"], left.protocol["seed"])
+            except (ValueError, KeyError) as error:
+                raise HTTPException(422, f"Incompatible crater cohorts: {error}") from error
         contrasts.append(contrast)
     return {"runs": reports, "contrasts": contrasts, "mock": reports[0]["mock"],
         "quality_comparable": all(item["comparable"] for item in contrasts),

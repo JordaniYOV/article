@@ -7,7 +7,7 @@ _CUSTOM_ADAPTERS = {}
 
 def register_adapter(backend: str, factory) -> None:
     """Register a custom factory without changing the runner or built-in names."""
-    if not backend or backend in {"mock", "hf_vlm", "hf_text", "seleno_native", "spacellava", "ibm_imp"} or backend in _CUSTOM_ADAPTERS:
+    if not backend or backend in {"mock", "hf_vlm", "hf_text", "seleno_native", "spacellava", "ibm_imp", "frozen_crater"} or backend in _CUSTOM_ADAPTERS:
         raise ValueError(f"Backend already exists or is invalid: {backend}")
     if not callable(factory):
         raise TypeError("factory must be callable")
@@ -32,4 +32,7 @@ def create_adapter(backend: str, options: Mapping[str, Any]):
     if backend == "ibm_imp":
         from benchmark_services.ibm.adapter import IBMIMPAdapter
         return IBMIMPAdapter(options)
+    if backend == "frozen_crater":
+        from benchmark_services.heads.adapter import FrozenCraterAdapter
+        return FrozenCraterAdapter(options)
     raise ValueError(f"Unknown model backend: {backend}")

@@ -22,7 +22,7 @@ class ServiceRejected(RuntimeError):
 class ServiceClient:
     def __init__(self, settings):
         self.settings = settings
-        self.urls = {"spacellava": settings.spacellava_service_url, "ibm": settings.ibm_service_url}
+        self.urls = {"spacellava": settings.spacellava_service_url, "ibm": settings.ibm_service_url, "heads": settings.heads_service_url}
 
     def request(self, service, method, path, payload=None):
         url = self.urls[service].rstrip("/")

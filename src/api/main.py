@@ -21,7 +21,7 @@ from benchmark_services.common.store import (
     DatasetConfig, DatasetConfigCreate, DatasetConfigRead, BuiltinDatasetRequest,
     ImportRun, MetricAnalysis, MetricAnalysisCreate, MetricAnalysisRead,
     ModelConfig, ModelConfigCreate, ModelConfigRead,
-    ModelResult, ModelResultCreate, ModelResultRead, Run, RunCreate, DatasetURL, ComparisonCreate, utc_now,
+    ModelResult, ModelResultCreate, ModelResultRead, Run, RunCreate, DatasetURL, ComparisonCreate, HeadDeploymentImport, utc_now,
 )
 from benchmark_services.common.settings import Settings, WORKSPACE_ROOT
 from .datasets import ingest_zip, download_zip
@@ -128,13 +128,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def service_health():
         client = ServiceClient(settings)
         result = {}
-        for service in ("spacellava", "ibm"):
+        for service in ("spacellava", "ibm", "heads"):
             try:
                 result[service] = client.health(service)
             except (ServiceUnavailable, ServiceRejected) as error:
                 result[service] = {"status": "unavailable", "error": str(error)}
         return {"dispatcher_enabled": settings.dispatcher_enabled,
             "dispatcher_error": application.state.dispatcher.last_error, "services": result}
+
+    @application.post("/head-deployments", tags=["configuration import"])
+    def import_head(payload: HeadDeploymentImport, session: SessionDep):
+        from .heads import import_deployment
+        return import_deployment(payload, session, fingerprint)
 
     @application.post("/model-configs", response_model=ModelConfigRead, status_code=201, tags=["model configs"])
     def create_model_config(payload: ModelConfigCreate, session: SessionDep):
@@ -404,7 +409,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         rows = session.exec(query.order_by(ModelResult.id).offset(offset).limit(limit)).all()
         return [{**ModelResultRead.model_validate(row).model_dump(),
             "image_url": f"/runs/{run_id}/results/{row.id}/image",
-            "map_url": f"/runs/{run_id}/results/{row.id}/map" if row.output_type == "imp_segmentation" and row.status == "ok" else None} for row in rows]
+            "map_url": f"/runs/{run_id}/results/{row.id}/map" if row.output_type in {"imp_segmentation", "catalog_crater_segmentation"} and row.status == "ok" else None} for row in rows]
 
     @application.get("/runs/{run_id}/results/{result_id}/{asset}", tags=["runs"])
     def result_asset(run_id: str, result_id: int, asset: str, session: SessionDep):
@@ -416,7 +421,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if asset == "image":
                 from benchmark_services.common.settings import orbital_path
                 path = orbital_path(row.image_paths[0])
-            elif asset == "map" and row.output_type == "imp_segmentation" and row.status == "ok":
+            elif asset == "map" and row.output_type in {"imp_segmentation", "catalog_crater_segmentation"} and row.status == "ok":
                 from benchmark_services.common.execution import map_artifacts
                 artifacts = map_artifacts(row.raw_response, Path(run.output_dir))
                 path = safe_path(artifacts["label_png"], Path(run.output_dir) / "maps")

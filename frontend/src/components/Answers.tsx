@@ -21,7 +21,7 @@ function ResultImage({ result, overlay }: { result: Result; overlay: boolean }) 
         context.drawImage(map, 0, 0);
         const pixels = context.getImageData(0, 0, map.naturalWidth, map.naturalHeight);
         for (let i = 0; i < pixels.data.length; i += 4) {
-          const imp = pixels.data[i] === 1;
+          const imp = result.output_type === 'catalog_crater_segmentation' ? pixels.data[i] === 250 : pixels.data[i] === 1;
           pixels.data[i] = 139; pixels.data[i + 1] = 85; pixels.data[i + 2] = 255; pixels.data[i + 3] = imp ? 190 : 0;
         }
         context.putImageData(pixels, 0, 0); setMapError(false);
@@ -30,11 +30,11 @@ function ResultImage({ result, overlay }: { result: Result; overlay: boolean }) 
     map.onerror = () => { if (alive) setMapError(true); };
     map.src = assetUrl(result.map_url);
     return () => { alive = false; map.onload = null; map.onerror = null; };
-  }, [result.map_url, overlay]);
+  }, [result.map_url, result.output_type, overlay]);
   return <div className="answer-image">{failed ? <div className="image-unavailable"><ImageIcon size={27} />Снимок недоступен</div> :
     <img src={assetUrl(result.image_url)} alt={`Орбитальный снимок ${result.source_sample_id}, ${conditionLabel(result.condition_id)}`} loading="lazy" onError={() => setFailed(true)} />}
-    {overlay && result.map_url && !mapError && <canvas ref={canvas} className="map-overlay" aria-label="Прогноз сегментации IMP" />}
-    {overlay && result.map_url && <span className="image-label"><span className="tiny-dot" />{mapError ? 'Карта недоступна' : 'IMP · прогноз'}</span>}
+    {overlay && result.map_url && !mapError && <canvas ref={canvas} className="map-overlay" aria-label={result.output_type === 'catalog_crater_segmentation' ? 'Прогноз полигонов кратеров' : 'Прогноз сегментации IMP'} />}
+    {overlay && result.map_url && <span className="image-label"><span className="tiny-dot" />{mapError ? 'Карта недоступна' : result.output_type === 'catalog_crater_segmentation' ? 'Кратеры · прогноз' : 'IMP · прогноз'}</span>}
   </div>;
 }
 
