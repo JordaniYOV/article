@@ -98,12 +98,33 @@ class SpaceLLaVAAdapter:
             raise ValueError("This protocol requires deterministic generation")
         if self.model is None:
             self.initialize()
+        if self.options.get("generation_diagnostics") is True:
+            from .language_diagnostics import generate_with_trace
+            answer = generate_with_trace(self, request)
+            return ModelResponse(request.request_id, answer, "ok", perf_counter() - start)
+        repo = Path(self.options["runtime_repo"]).resolve()
+        with offline_imports(repo):
+            ids, pixels, image_size = self.prepare_inputs(request)
+            with self.torch.inference_mode():
+                output = self.model.generate(ids, images=pixels, image_sizes=[image_size],
+                    do_sample=False, num_beams=1, max_new_tokens=request.max_new_tokens, use_cache=True)
+            # Native LLaVA generates from inputs_embeds: decode returned IDs,
+            # without assuming a Qwen-style input-token prefix.
+            answer = self.tokenizer.batch_decode(output, skip_special_tokens=True)[0].strip()
+        return ModelResponse(request.request_id, answer, "ok", perf_counter() - start)
+
+    def prepare_inputs(self, request, *, conversation_template="llava_v1", return_metadata=False):
+        """Identical image/token preprocessing for inference and diagnostics; no GT."""
+        if len(request.image_paths) != 1 or request.modality_paths:
+            raise ValueError("Exactly one RGB image is required")
+        if conversation_template not in {"llava_v1", "llava_v0"}:
+            raise ValueError("Unsupported diagnostic conversation template")
         from PIL import Image
         repo = Path(self.options["runtime_repo"]).resolve()
         with offline_imports(repo):
             constants = importlib.import_module("llava.constants")
             utils = importlib.import_module("llava.mm_utils")
-            conv = importlib.import_module("llava.conversation").conv_templates["llava_v1"].copy()
+            conv = importlib.import_module("llava.conversation").conv_templates[conversation_template].copy()
             image_token = constants.DEFAULT_IMAGE_TOKEN
             if getattr(self.model.config, "mm_use_im_start_end", False):
                 image_token = constants.DEFAULT_IM_START_TOKEN + image_token + constants.DEFAULT_IM_END_TOKEN
@@ -118,15 +139,19 @@ class SpaceLLaVAAdapter:
             else:
                 pixels = pixels.to(tower.device, dtype=tower.dtype)
             device = self.model.get_input_embeddings().weight.device
-            ids = utils.tokenizer_image_token(conv.get_prompt(), self.tokenizer, constants.IMAGE_TOKEN_INDEX,
+            rendered_prompt = conv.get_prompt()
+            ids = utils.tokenizer_image_token(rendered_prompt, self.tokenizer, constants.IMAGE_TOKEN_INDEX,
                                              return_tensors="pt").unsqueeze(0).to(device)
-            with self.torch.inference_mode():
-                output = self.model.generate(ids, images=pixels, image_sizes=[image.size],
-                    do_sample=False, num_beams=1, max_new_tokens=request.max_new_tokens, use_cache=True)
-            # Native LLaVA generates from inputs_embeds: decode the returned IDs,
-            # without assuming a Qwen-style input-token prefix.
-            answer = self.tokenizer.batch_decode(output, skip_special_tokens=True)[0].strip()
-        return ModelResponse(request.request_id, answer, "ok", perf_counter() - start)
+            if return_metadata:
+                return ids, pixels, image.size, {"conversation_template": conversation_template,
+                    "rendered_prompt": rendered_prompt, "roles": list(conv.roles),
+                    "separator": conv.sep, "separator2": conv.sep2,
+                    "input_token_ids": ids[0].detach().cpu().tolist(),
+                    "image_token_count": int((ids == constants.IMAGE_TOKEN_INDEX).sum().item()),
+                    "tokenizer_bos_id": self.tokenizer.bos_token_id,
+                    "tokenizer_eos_id": self.tokenizer.eos_token_id,
+                    "tokenizer_pad_id": self.tokenizer.pad_token_id}
+        return ids, pixels, image.size
 
     def close(self):
         self.tokenizer = self.processor = None

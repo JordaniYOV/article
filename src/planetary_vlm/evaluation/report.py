@@ -7,6 +7,7 @@ from planetary_vlm.io import records_fingerprint
 
 from .metrics import classification_metrics
 from .parser import parse_answer, validate_answers
+from .references import READY, reference_status
 
 REQUEST_REQUIRED = {"request_id", "image_paths", "prompt", "allowed_answers", "max_new_tokens", "do_sample"}
 TARGET_REQUIRED = {"request_id", "answer", "source_sample_id", "group_id", "derivation_version"}
@@ -84,12 +85,14 @@ def _validate_prediction(prediction: dict) -> None:
 
 
 def _summarize(rows: list[dict], *, same_task: bool) -> dict:
-    scored = [row for row in rows if row["scoring_status"] != "unsupported_scoring"]
+    scored = [row for row in rows if row["scoring_status"] in {"valid", "invalid", "failure"}]
     states = Counter(row["scoring_status"] for row in scored)
     correct = sum(row["correct"] for row in scored)
     result = {
         "n_total": len(rows), "n_scored": len(scored),
-        "n_unsupported_scoring": len(rows) - len(scored),
+        "n_unsupported_scoring": sum(row["scoring_status"] == "unsupported_scoring" for row in rows),
+        "n_unscored_reference": sum(row["scoring_status"] == "unscored_reference" for row in rows),
+        "reference_coverage": sum(row["reference_status"] == READY for row in rows) / len(rows) if rows else None,
         "n_correct": correct, "n_valid": states["valid"],
         "n_invalid": states["invalid"], "n_failure": states["failure"],
         "response_status_counts": dict(Counter(row["response_status"] for row in rows)),
@@ -103,7 +106,8 @@ def _summarize(rows: list[dict], *, same_task: bool) -> dict:
     }
     label_sets = {tuple(sorted(row["allowed_answers"])) for row in scored}
     if not scored:
-        result["classification_status"] = "unsupported_scoring" if rows else "empty"
+        result["classification_status"] = ("unscored_reference" if result["n_unscored_reference"] else
+                                           "unsupported_scoring" if rows else "empty")
     elif len(label_sets) != 1:
         result["classification_status"] = "incompatible_label_sets"
     elif not same_task:
@@ -114,14 +118,16 @@ def _summarize(rows: list[dict], *, same_task: bool) -> dict:
     return result
 
 
-def evaluate(requests: list[dict], targets: list[dict], predictions: list[dict]) -> dict:
+def evaluate(requests: list[dict], targets: list[dict], predictions: list[dict], *, response_format="exact") -> dict:
     """Evaluate one model/run, rejecting mismatched manifests instead of dropping rows.
 
     Free-form requests are recorded as unsupported_scoring. A supplied request
     fingerprint is checked, but it does not hash asset contents or ground truth.
     """
     req = _index(requests, "requests", REQUEST_REQUIRED, {"modality_paths"})
-    gt = _index(targets, "targets", TARGET_REQUIRED, {"task_id", "condition_id"})
+    if response_format not in {"exact", "label_evidence"}:
+        raise ValueError("response_format must be exact or label_evidence")
+    gt = _index(targets, "targets", TARGET_REQUIRED, {"task_id", "condition_id", "reference_status"})
     pred = _index(predictions, "predictions", PREDICTION_REQUIRED,
                   {"error_message", "model_id", "run_id", "mock", "request_manifest_sha256"})
     if req.keys() != gt.keys():
@@ -144,31 +150,53 @@ def evaluate(requests: list[dict], targets: list[dict], predictions: list[dict])
     rows = []
     for key, request in req.items():
         target = gt[key]
-        for field in TARGET_REQUIRED | {"task_id", "condition_id"}:
+        for field in (TARGET_REQUIRED - {"answer"}) | {"task_id", "condition_id"}:
             if field in target:
                 _text(target[field], f"target {field}")
         allowed = request["allowed_answers"]
-        answer = parse_answer(target["answer"], allowed) if allowed else target["answer"]
-        if allowed and answer is None:
-            raise ValueError(f"target answer is outside allowed_answers: {key}")
+        admission, admission_reason = reference_status(target, has_reference=target["answer"] is not None)
+        answer = None
+        if admission == READY:
+            _text(target["answer"], "target answer")
+            answer = parse_answer(target["answer"], allowed) if allowed else target["answer"]
+            if allowed and answer is None:
+                raise ValueError(f"target answer is outside allowed_answers: {key}")
         prediction = pred.get(key)
         response_status = prediction["status"] if prediction else "missing"
         parsed = None
+        format_valid, evidence = False, None
+        if allowed and response_status == "ok":
+            if response_format == "label_evidence":
+                from .structured import parse_label_evidence
+                structured = parse_label_evidence(prediction["raw_response"], allowed)
+                parsed, format_valid, evidence = structured["parsed_answer"], structured["format_valid"], structured["evidence"]
+            else:
+                parsed = parse_answer(prediction["raw_response"], allowed)
+                format_valid = parsed is not None
         if not allowed:
             scoring_status = "unsupported_scoring"
+        elif admission != READY:
+            scoring_status = "unscored_reference"
         elif response_status != "ok":
             scoring_status = "failure"
         else:
-            parsed = parse_answer(prediction["raw_response"], allowed)
-            scoring_status = "valid" if parsed is not None else "invalid"
+            scoring_status = "valid" if format_valid else "invalid"
+        # A recognized label in a malformed declared format is NOT a valid
+        # prediction for metric counts. Preserve it separately for diagnostics.
+        label = parsed
+        if scoring_status == "invalid":
+            parsed = None
         rows.append({
             "request_id": key, "task_id": target.get("task_id", "default"),
             "condition_id": target.get("condition_id", "clean"),
             "source_sample_id": target["source_sample_id"], "group_id": target["group_id"],
             "derivation_version": target["derivation_version"],
             "allowed_answers": list(allowed), "answer": answer, "parsed_answer": parsed,
+            "reference_status": admission, "reference_reason": admission_reason,
+            "format_valid": format_valid, "recognized_label": label, "evidence": evidence,
             "scoring_status": scoring_status, "response_status": response_status,
-            "correct": (parsed == answer if allowed else None),
+            "correct": (scoring_status == "valid" and parsed == answer
+                        if scoring_status in {"valid", "invalid", "failure"} else None),
             "raw_response": prediction["raw_response"] if prediction else None,
             "error_message": prediction.get("error_message") if prediction else "missing prediction",
             "elapsed_seconds": prediction["elapsed_seconds"] if prediction else None,
@@ -181,9 +209,11 @@ def evaluate(requests: list[dict], targets: list[dict], predictions: list[dict])
                "metrics": _summarize(group, same_task=True)}
               for key, group in sorted(groups.items())]
     return {
-        "schema_version": "evaluation-v1", **metadata,
+        "schema_version": "evaluation-v2", **metadata,
+        "scientific_result": False,
         "request_manifest_verified": fingerprint is not None,
-        "parser": "exact_casefold_collapsed_whitespace_v1",
+        "parser": "exact_casefold_collapsed_whitespace_v1" if response_format == "exact" else "label-evidence-two-lines-v1",
+        "response_format": response_format,
         "overall": _summarize(rows, same_task=len({row["task_id"] for row in rows}) <= 1),
         "slices": slices, "per_request": rows,
         "limitations": [
@@ -192,5 +222,7 @@ def evaluate(requests: list[dict], targets: list[dict], predictions: list[dict])
             "Overall accuracy is question-weighted over closed-form requests, not a cross-task scientific ranking.",
             "Optional request fingerprints bind manifest fields, not asset contents, GT history, or annotation completeness.",
             "Binary rates apply to YES/NO labels and valid answers; inspect coverage and classwise failures.",
+            "Candidate/unknown references are unscored, never negative labels or model failures.",
+            "Presence false positives are a restricted proxy, not a judgement of unsupported free-form claims.",
         ],
     }

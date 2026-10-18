@@ -1,6 +1,7 @@
 """Validate the final 300-image orbital dataset without reading source caches."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 from collections import Counter
@@ -22,7 +23,19 @@ def check_asset(row: dict, key: str, sha_key: str) -> Path:
     return path
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    global DATA
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--collection', default='data_orbital/orbital_300_v3')
+    args = parser.parse_args(argv)
+    selected = Path(args.collection)
+    if any(p.casefold() == 'data_rover' for p in selected.parts):
+        raise ValueError('Protected archive cannot be verified')
+    if not selected.is_absolute(): selected = ROOT / selected
+    selected = selected.resolve()
+    if selected == ROOT / 'data_orbital' or not selected.is_relative_to(ROOT / 'data_orbital'):
+        raise ValueError('Use a versioned data_orbital collection')
+    DATA = selected
     all_rows: list[dict] = []
     report: dict[str, object] = {"counts": {}, "segmentation_class_support": {}}
     for planet in ("mars", "moon"):

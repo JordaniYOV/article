@@ -6,6 +6,7 @@ __pycache__/
 *.egg-info/
 /build/
 .pytest_cache/
+/.tmp-test-*/
 .env
 .env.*
 !.env.example

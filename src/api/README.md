@@ -284,21 +284,35 @@ Phase показывает подготовку, загрузку, inference. О
 `POST /runs/{id}/metrics` после completed рассчитывает и сохраняет:
 
 - counts ok/error/unsupported, время успешных запросов без загрузки модели;
-- при allowed_answers и answer в manifest — accuracy, coverage, confusion matrix,
+- для канонических текстовых ответов при allowed_answers и допущенном answer в manifest — accuracy, coverage, confusion matrix,
   per-class precision/recall/F1 и для YES/NO FPR/FNR;
-- IBM — pixel accuracy, IoU/Dice по классам, mean IoU и coverage карт;
+- для native IMP masks — pixel accuracy, IoU/Dice по классам, mean IoU и coverage карт;
 - показатели каждого условия и изменение относительно clean.
 
 Парсер принимает ответ целиком из заданного списка, нормализуя регистр/пробелы.
 Из свободного описания YES/NO не извлекается. Invalid/error входят в основной
-знаменатель accuracy. Без GT метрика unavailable. GT не передаётся модели.
+знаменатель accuracy. Без GT метрика unavailable. Кандидатные/неизвестные эталоны
+дают `unscored_reference`, а не отрицательную метку или ошибку модели.
+Для crater Q1–Q4 API требует явного `reference_status: REFERENCE_READY`,
+`review_status: accepted` или `scoring_eligible: true`; противоречащие flags отклоняются.
+Наличие `answer` само по себе не допускает текущие crater candidates к scoring.
+Поле `scored:false` означает «ещё не оценено», не заменяет статус допуска.
+GT не передаётся модели.
 Сегментационная маска получает то же shear-поле: nearest-neighbor, exterior=255
 ignored. Photometric эффекты маску не меняют. IoU/Dice считаются по успешным
 картам; сбои отражаются в coverage. DEM/mask/predicted depth не становятся
 физической проходимостью без отдельного измеренного terrain/cost protocol.
 
+После shear исходные ответы crater Q1–Q4 автоматически не переиспользуются:
+нужны явные `condition_answers` для соответствующего condition ID. Сравнение с
+clean не считает delta при различающемся наборе допущенных сцен.
+При частичном GT/покрытии карт возвращается `quality_status: partial`.
+
 `GET /runs/{id}/report` возвращает модель, датасет, прогресс, condition summaries
-и chart data. E3 использует confusion matrices E1/E2. E4 остаётся unsupported;
+и chart data. E1/E2 отражают доступность GT и выбранных условий; без искажений
+E2 — `not_selected`. E3 даёт только false-positive proxy вопроса presence с
+явным знаменателем; неподтверждённые утверждения в свободном тексте не оцениваются.
+E4 остаётся unsupported;
 E5 требует отдельных согласованных запусков. E1–E5 — исследования, а не пять
 функций искажений. Готовая веб-страница в этот этап не входит.
 
@@ -318,6 +332,16 @@ bootstrap по scene groups (95%, 1000 повторов); один group не д
 разные определения. Научное ранжирование требует общего выходного протокола,
 overlap audit и достаточной независимой выборки. Mock помечается и не является
 научным результатом; сравнение mock/real запрещено.
+
+Метрики выбираются по `output_type`/задаче, а не по `run.kind`: канонические
+Q1–Q4-ответы от VLM и объявленного encoder readout используют одно ядро оценки.
+Это не добавляет crater head в HTTP worker и не импортирует Colab ZIP в SQLite
+автоматически. Native masks и текст по-прежнему не дают общего ranking.
+Сравнение native IoU требует полного совпадающего покрытия карт и GT.
+Версия метода — `orbital-api-metrics-v2`; старые результаты не перезаписываются,
+для них следует заново вызвать `/metrics`. Перед расчётом/сравнением проверяются
+замороженные protocol/selection, prepared requests, image hashes и происхождение
+каждого ответа. Детали CLI и формата эталонов: `docs/protocols/evaluation_v2.md`.
 
 ## Настройки и прежние ручки
 

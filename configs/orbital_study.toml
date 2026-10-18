@@ -1,6 +1,6 @@
 schema_version = "orbital-study-v1"
 status = "data_collected_orbital_experiments_designed_admission_pending"
-date = "2026-10-12"
+date = "2026-10-15"
 data_root = "data_orbital"
 legacy_rover_data_root = "data_rover"
 # Primary complete-system study; optional probe training needs a separate task.
@@ -13,8 +13,11 @@ optional_encoder_probe_config = "linear_head_approach/config.toml"
 optional_encoder_probe_protocol = "linear_head_approach/protocol.md"
 model_visible_inputs_exclude = ["mask", "annotations", "answers", "outcome_telemetry"]
 
-[datasets.curated_orbital_v3]
-root = "data_orbital/orbital_300_v3"
+[datasets.curated_orbital_v4]
+root = "data_orbital/orbital_300_v4"
+parent_collection = "data_orbital/orbital_300_v3"
+image_replacement_module = "planetary_vlm.datasets.image_replacement"
+image_replacement_record = "data_orbital/orbital_300_v4/image_replacement.json"
 selection_script = "scripts/build_orbital_300.py"
 verification_script = "scripts/verify_orbital_300.py"
 segmentation_images_per_planet = 50
@@ -23,7 +26,7 @@ train_images_per_planet = 50
 moon_segmentation_heldout_available = 50
 moon_segmentation_final_test_available = 17
 moon_segmentation_train_samples_in_50_image_collection = 0
-status = "assembled_and_verified_source_caches_pruned"
+status = "one_registered_image_replaced_all_masks_and_heights_byte_identical"
 
 [models.specialized]
 id = "nasa-ibm-lunar-fm"
@@ -42,7 +45,7 @@ training_domain = "synthetic_spatial_vqa_not_planetary_orbital"
 fit_16gb = "unverified_requires_quantization_or_offload_pilot"
 
 [datasets.mars_crater_binary_seg]
-selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/mars/segmentation_manifest.jsonl"
 task = "binary_crater_segmentation"
 selected_count = 14
 label_type = "pixel_mask"
@@ -51,21 +54,21 @@ status = "selected_source_cache_pruned_group_geography_needs_audit"
 [datasets.mars_crater_multi_seg]
 source_url = "https://huggingface.co/datasets/Mirali33/mb-crater_multi_seg"
 source_revision = "9a26ac9001532bc9f4fe37abfa3fce13e4ea1b74"
-selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/mars/segmentation_manifest.jsonl"
 task = "crater_type_segmentation"
 selected_count = 12
 label_type = "pixel_mask"
 classes = ["Background", "Other", "Layered", "Buried", "Secondary"]
 
 [datasets.mars_conequest_seg]
-selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/mars/segmentation_manifest.jsonl"
 task = "binary_cone_segmentation"
 selected_count = 20
 label_type = "pixel_mask"
 status = "selected_exploratory_val_test_share_source_regions"
 
 [datasets.moon_imp_seg]
-selection_manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/moon/segmentation_manifest.jsonl"
 task = "irregular_mare_patch_segmentation"
 selected_count = 21
 label_type = "pixel_mask"
@@ -81,20 +84,20 @@ status = "not_in_active_collection_source_cache_pruned"
 source_url = "https://huggingface.co/datasets/Mirali33/mb-boulder_seg"
 task = "binary_boulder_segmentation"
 published_test_count = 4
-selection_manifest = "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/mars/segmentation_manifest.jsonl"
 selected_test_count = 4
 status = "selected_small_precise_polygon_test_subset"
 
 [datasets.moon_debris_nontrain]
 source_url = "https://huggingface.co/datasets/F1nnSBK/lunar-debris-and-voids"
 task = "pit_stone_crater_instance_segmentation"
-selection_manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/moon/segmentation_manifest.jsonl"
 selected_nontrain_count = 9
 status = "exploratory_mobile_sam_plus_manual_fallback_labels"
 
 [datasets.moon_wac_crater_polygons]
 source_url = "https://huggingface.co/datasets/nasa-ibm-ai4science/Sombench-WAC-Crater-Detection"
-selection_manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+selection_manifest = "data_orbital/orbital_300_v4/moon/segmentation_manifest.jsonl"
 selected_nontrain_count = 20
 task = "catalog_crater_polygon_segmentation"
 label_type = "coco_polygons_rasterized"
@@ -107,6 +110,73 @@ secondary_pair_candidate = "imp_moon_center_v1"
 mars_candidates = ["crater_mars_center_v1", "cone_mars_center_v1", "boulder_mars_center_v1"]
 terrain_candidates = ["height_pair_v1", "height_lowest_v1", "route_choice_v1", "route_grid_v1"]
 rule_status = "templates_defined_thresholds_and_admission_not_frozen"
+
+[questions.assignment]
+status = "four_tasks_per_scene_by_track_reference_admission_pending"
+segmentation_tasks = ["crater_presence_v1", "crater_center_v1", "crater_largest_location_v1", "crater_half_count_v1"]
+height_tasks = ["height_pair_v1", "height_lowest_v1", "route_choice_v1", "route_grid_v1"]
+images_per_planet_per_track = 50
+tasks_per_scene = 4
+preserve_original_splits_and_groups = true
+missing_reference_policy = "unscored_not_NO_or_NONE"
+automatic_class_substitution = false
+
+[questions.crater_annotation]
+config = "configs/crater_annotation_v2.toml"
+protocol = "docs/protocols/crater_annotation_v2.md"
+status = "annotation_rules_fixed_converter_implemented_candidates_second_review_pending"
+annotation_rules_frozen = true
+test_annotation_ready = true
+reference_admission = "question_level_answer_invariance"
+complete_instances_available = false
+converter_implemented = true
+
+[questions.crater_preparation_v1]
+module = "planetary_vlm.datasets.crater_annotations"
+output = "data_orbital/crater_annotations_v5"
+protocol = "docs/protocols/crater_annotations_v1.md"
+status = "candidate_references_not_final_scoring_targets"
+source_images = 100
+candidate_questions = 400
+invariant_candidate_answers = 400
+unknown_references = 0
+human_visibility_confirmations = 3
+reference_ready_questions = 0
+source_geometry_pending_images = 0
+source_catalog_geometry_complete = true
+mars_catalog_geometry_recipe = "mars-catalog-raster-reconstruction-v1"
+mars_catalog_geometry_status = "reverse_engineered_on_source_val_exact_replay_on_14_val_and_12_test_frames_not_visual_GT_acceptance"
+reference_targets_in_inference = false
+
+[source_artifacts]
+manifest = "data_orbital/source_artifacts_v1.json"
+policy = "historical_v3_band_retention_superseded_by_explicit_image_only_replacement"
+role = "historical_record_not_current_colab_input"
+clean_condition_means = "selected_versioned_source_without_additional_generated_corruption"
+unknown_references = "remain_unscored_without_verified_ground_truth"
+preserve_source_splits_and_groups = true
+
+[questions.crater_colab_v5]
+collection = "data_orbital/orbital_300_v4"
+candidate_build = "data_orbital/crater_annotations_v5"
+bundle = "outputs/colab/spacellava_q1_q4_v5_clean.zip"
+notebook = "notebooks/spacellava_q1_q4_colab.ipynb"
+images = 100
+requests = 400
+conditions = ["clean"]
+scoring_targets_accepted = false
+gpu_smoke_status = "not_run_in_this_preparation"
+
+[questions.preparation_v1]
+module = "planetary_vlm.datasets.orbital_questions"
+output = "data_orbital/orbital_questions_v1"
+protocol = "docs/protocols/orbital_questions_v1.md"
+status = "clean_Q5_Q6_reference_prompt_pilot_not_ibm_paired_admission"
+reference_tasks = ["height_pair_v1", "height_lowest_v1"]
+conditions = ["clean"]
+reference_images = 100
+requests = 200
+reference_targets_in_inference_bundle = false
 
 [admission]
 common_task = "shared_crater_question_contract_admission_pending"
@@ -137,6 +207,8 @@ train_excluded_from_primary = 100
 variants_per_original_including_clean = 6
 maximum_input_variants_if_all_admitted = 1200
 volume_is_planned_upper_bound = true
+maximum_clean_requests_per_model_if_all_four_tasks_admitted = 800
+maximum_requests_per_model_with_five_variants_if_all_admitted = 4800
 pool_includes_dev = true
 route_subset = "limited_after_admission"
 

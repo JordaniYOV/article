@@ -18,6 +18,25 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("--requests", required=True)
     validate.add_argument("--targets")
     validate.add_argument("--check-assets", action="store_true")
+    orbital_questions = commands.add_parser("orbital-questions", help="Build clean orbital questions and separate reference targets, no inference")
+    orbital_questions.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    orbital_questions.add_argument("--output", required=True)
+    crater_questions = commands.add_parser("crater-questions", help="Merge native CVAT/source crater annotations and prepare reviewed Q1-Q4 references")
+    crater_questions.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    crater_questions.add_argument("--output", required=True)
+    crater_questions.add_argument("--collection", default="data_orbital/orbital_300_v3")
+    for planet in ("moon", "mars"):
+        for split in ("val", "test"):
+            crater_questions.add_argument(f"--{planet}-{split}", required=True, help="CVAT for images 1.1 annotations-only ZIP")
+    crater_questions.add_argument("--source-cache", default="data_orbital/crater_source_annotations_v1")
+    crater_questions.add_argument("--fetch-source-annotations", action="store_true", help="Explicitly fetch pinned annotation files only; no images/weights/train images")
+    crater_questions.add_argument("--transport", choices=("urllib", "curl"), default="urllib")
+    crater_questions.add_argument("--reviews", help="Hash-bound second-review decisions JSONL; never auto-accept a generated queue")
+    crater_questions.add_argument("--review-context", help="Provenance of human clarifications; not an acceptance switch")
+    crater_questions.add_argument("--no-previews", action="store_true")
+    crater_verify = commands.add_parser("crater-verify", help="Verify a crater annotation version without inference or auto-acceptance")
+    crater_verify.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    crater_verify.add_argument("--dataset", required=True)
     run_parser = commands.add_parser("run", help="Run one configured backend serially")
     run_parser.add_argument("--config", required=True)
     run_parser.add_argument("--resume", action="store_true")
@@ -31,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_parser = commands.add_parser("evaluate", help="Score saved responses without loading models")
     for name in ("requests", "targets", "predictions", "output"):
         evaluate_parser.add_argument(f"--{name}", required=True)
+    evaluate_parser.add_argument("--response-format", choices=("exact", "label_evidence"), default="exact",
+        help="Explicit output contract; never search prose for a favorable label")
     prepare_parser = commands.add_parser("prepare", help="Create image variants without reading answers")
     for name in ("requests", "config", "output"):
         prepare_parser.add_argument(f"--{name}", required=True)
@@ -117,7 +138,25 @@ def main(argv: list[str] | None = None) -> int:
             action.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "dataset":
+        if args.command == "crater-verify":
+            from planetary_vlm.datasets.crater_annotations import verify_crater_build
+            print(json.dumps(verify_crater_build(args.workspace, args.dataset), ensure_ascii=False, indent=2))
+        elif args.command == "crater-questions":
+            from planetary_vlm.datasets.crater_annotations import build_crater_questions
+            from planetary_vlm.datasets.crater_sources import fetch_annotations
+            workspace = Path(args.workspace).resolve()
+            source_cache = Path(args.source_cache)
+            if not source_cache.is_absolute(): source_cache = workspace / source_cache
+            if args.fetch_source_annotations:
+                fetch_annotations(workspace, source_cache, transport=args.transport)
+            exports = {(planet, split): getattr(args, f"{planet}_{split}") for planet in ("moon", "mars") for split in ("val", "test")}
+            print(json.dumps(build_crater_questions(workspace, args.output, exports, source_cache,
+                reviews=args.reviews, context=args.review_context, previews=not args.no_previews,
+                collection=args.collection), ensure_ascii=False, indent=2))
+        elif args.command == "orbital-questions":
+            from planetary_vlm.datasets.orbital_questions import build_questions
+            print(json.dumps(build_questions(args.workspace, args.output), ensure_ascii=False, indent=2))
+        elif args.command == "dataset":
             from planetary_vlm.datasets import MarsData, LuneData
             operation = args.dataset_command
             if operation == "download":
@@ -190,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
             from planetary_vlm.evaluation.report import evaluate
             requests = [asdict(request) for request in load_requests(args.requests)]
             predictions = read_jsonl(args.predictions)
-            report = evaluate(requests, read_jsonl(args.targets), predictions)
+            report = evaluate(requests, read_jsonl(args.targets), predictions, response_format=args.response_format)
             write_json(args.output, report)
             print(args.output)
         elif args.command == "prepare":

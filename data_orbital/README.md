@@ -1,11 +1,47 @@
-# Orbital 300 v3
+# Orbital 300 v4
 
-The active collection is [`orbital_300_v3/`](orbital_300_v3/). It has **300 distinct real orbital images**: 100 Moon and 100 Mars evaluation images, plus 50 Moon and 50 Mars train images. Each planet's evaluation set has 50 image/pixel-mask pairs and a separate 50 image/elevation-map pairs. The train images have both a publisher mask and a height array. `audit.json` and six JSONL manifests list exact files, source IDs, original splits, revisions, checksums, label semantics, and display transforms.
+The active collection is [`orbital_300_v4/`](orbital_300_v4/). It has **300 distinct real orbital images**: 100 Moon and 100 Mars evaluation images, plus 50 Moon and 50 Mars train images. Each planet's evaluation set has 50 image/pixel-mask pairs and a separate 50 image/elevation-map pairs. The train images have both a publisher mask and a height array. `audit.json` and six JSONL manifests list exact files, source IDs, original splits, revisions, checksums, label semantics, and display transforms.
+
+Only `mars_seg_018/image.png` changed from v3: a real THEMIS v11 crop was
+resampled and image-feature-registered to the original 512×512 annotation grid.
+All 799 other data assets, including every mask/height array, are byte-identical.
+The old v3 collection and sealed candidate builds remain intact.
 
 | Planet | Segmentation eval | Elevation eval | Train | Segmentation test/val |
 |---|---:|---:|---:|---:|
 | Mars | 50 | 50 | 50 | 33 / 17 |
 | Moon | 50 | 50 | 50 | 17 / 33 |
+
+Question assignment selected on 14 October 2026: Q1–Q4 target each planet's
+50 semantic-track images; Q5–Q8 target its separate 50 height-track images.
+Four tasks per image, subject to reference/model admission. This does not make
+non-crater masks into crater labels or admit routing from height arrays alone.
+See `docs/protocols/orbital_study.md`. The prepared `orbital_questions_v1`
+remains a partial clean Q5/Q6 pilot, not the full 800-request design.
+
+Q1–Q4 preparation, 15 October 2026: the current separate candidate annotation
+build is [`crater_annotations_v5/`](crater_annotations_v5/). It preserves the four
+native CVAT exports and recovered publisher objects for all 100 semantic images,
+with 400 invariant candidate answers and 0 unknown references out of 400.
+The corrected Moon val ZIP removes ten human-confirmed non-craters, confirms
+three formerly uncertain objects and refines one truncated bbox. The human
+confirmed the other three exports and three specifically queried rim flags;
+the previously obscured region in mars_seg_018 is visible in the registered replacement.
+All 26 Mars crater masks are exactly reproduced from their 1,101 catalog IDs
+using a frozen reverse-engineered raster recipe selected on source-val and
+checked without refitting on source-test. This verifies raster alignment, not
+physical map scale or visual rim correctness. **No scoring targets are accepted
+yet**; explicit source-instance/identity second review remains required. Versions v1–v4 are historical
+snapshots, not the current candidate build. See
+[`crater_annotations_v1.md`](../docs/protocols/crater_annotations_v1.md) for the
+format/converter protocol; its version is separate from the data-folder revision.
+
+The earlier retain-band decision in `source_artifacts_v1.json` is historical,
+superseded by the explicit image-only replacement request. The different mosaic
+versions are not a controlled single-corruption pair. Replacement provenance is
+in `orbital_300_v4/image_replacement.json`; its separate image-license review is
+pending. `outputs/colab/spacellava_q1_q4_v5_clean.zip` contains 100 RGB images and
+400 closed-form requests, no masks/heights/answers, for unscored inference.
 
 All 100 segmentation images retain a publisher **val/test** split. The 100 height images also retain their source val/test strata. Train images are excluded from evaluation. The Mars height images are at least three MMLSv2 grid tiles (Manhattan distance) from the selected train tiles; this is a local adjacency check, not a proof of geographic independence across the parent mosaic. Lunar WAC train and evaluation images have disjoint product IDs. The source region overlap for Mars ConeQuest val/test and any model pretraining overlap remain open audit limitations.
 
@@ -46,10 +82,10 @@ manifests are separated in `linear_head_approach/outputs/encoder_probe_wac_v1/`.
 
 ## Layout and verification
 
-`orbital_300_v3/{mars,moon}/{segmentation,height,train}/001/` contains assets. Each planet has `{segmentation,height,train}_manifest.jsonl`; paths in these manifests are relative to the repository root. Height arrays are NumPy `.npy` files. `audit.json` records aggregate counts. To verify every path, checksum, shape, mask value, split, and group separation:
+`orbital_300_v4/{mars,moon}/{segmentation,height,train}/001/` contains assets. Each planet has `{segmentation,height,train}_manifest.jsonl`; paths in these manifests are relative to the repository root. Height arrays are NumPy `.npy` files. `audit.json` records aggregate counts. To verify every path, checksum, shape, mask value, split, and group separation:
 
 ```powershell
-& .\.venv-benchmark\Scripts\python.exe scripts\verify_orbital_300.py
+& .\.venv-benchmark\Scripts\python.exe scripts\verify_orbital_300.py --collection data_orbital/orbital_300_v4
 ```
 
 Source caches and previous selections were removed after verification. [`scripts/build_orbital_300.py`](../scripts/build_orbital_300.py) records the selection logic; rerunning it requires reacquiring the pinned source subsets first. No model weights, paid APIs, training, or GPU jobs were used. The protected `data_rover/` archive was not accessed.

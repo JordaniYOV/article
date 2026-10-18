@@ -59,7 +59,7 @@ def input_fingerprint(requests) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
-def run(config: RunConfig, *, resume: bool = False) -> Path:
+def run(config: RunConfig, *, resume: bool = False, on_response=None, on_initialized=None) -> Path:
     # Imports are lazy so validation/evaluation never needs Torch/Transformers.
     from planetary_vlm.models.registry import create_adapter
 
@@ -127,7 +127,12 @@ def run(config: RunConfig, *, resume: bool = False) -> Path:
             else:
                 write_json(loading_path, {"elapsed_seconds": time.perf_counter() - start,
                                           "provenance": provenance})
+        # Optional diagnostics run on the same loaded adapter, before inference.
+        # Reference answers/telemetry must never be added to ModelRequest.
+        if on_initialized is not None:
+            on_initialized(adapter, destination)
         with predictions_path.open("a", encoding="utf-8", newline="\n") as stream:
+            persisted = len(completed)
             for request in pending:
                 start = time.perf_counter()
                 try:
@@ -152,6 +157,10 @@ def run(config: RunConfig, *, resume: bool = False) -> Path:
                 stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
                 stream.flush()
                 os.fsync(stream.fileno())
+                persisted += 1
+                if on_response is not None:
+                    # Persistence/Colab checkpointing is outside adapter timing.
+                    on_response(destination, persisted, len(requests))
     finally:
         adapter.close()
     return destination

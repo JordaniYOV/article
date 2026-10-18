@@ -1,0 +1,31 @@
+{
+  "schema": "planetary-two-image-smoke-v1",
+  "scientific_ground_truth": false,
+  "purpose": "Two val development controls for visual-path and instruction-format diagnostics only",
+  "annotation_build": "crater_annotations_v5",
+  "limitation": "The complete candidate dataset is still pending independent source-instance review. These two CVAT development checks do not accept any scientific scoring targets. NO means no eligible impact craters under the size/visibility rule, not a featureless surface.",
+  "controls": [
+    {
+      "sample_id": "moon_seg_002",
+      "source_split": "val",
+      "expected_presence": "YES",
+      "image_sha256": "4f8f93f91a302daf31476f7a2fb51ba3441c59ae1a6a4753fd81b2815f840238",
+      "annotation_fingerprint": "5f0f2e4a3b1186df19f2440b66f54593f769ac20fa02af31d92d8b9b4909ac79",
+      "complete_for_size_rule": true,
+      "cvat_result": "supplemented",
+      "annotation_archive_sha256": "664990e98e673eb8b51f8b81c21db3fd8a6da16d6b29eab2454529ad9d47daf0",
+      "review_basis": "Existing full-image CVAT review and supplemented crater inventory, corrected Moon val export; a large crater is also visible in the RGB. Used only as a development presence control."
+    },
+    {
+      "sample_id": "moon_seg_012",
+      "source_split": "val",
+      "expected_presence": "NO",
+      "image_sha256": "bbc2bec1ca26cc62ae0da1ca0895b2d37819ccd07e92237f47ff8dedd90e5e36",
+      "annotation_fingerprint": "e68e78712920cafd402ed1c4fe77271dbba71d3c15b3a343ed995b21bb0d8cb8",
+      "complete_for_size_rule": true,
+      "cvat_result": "no_eligible_craters",
+      "annotation_archive_sha256": "664990e98e673eb8b51f8b81c21db3fd8a6da16d6b29eab2454529ad9d47daf0",
+      "review_basis": "Explicit CVAT full-image no_eligible_craters review with complete_for_size_rule=true, zero supplemental/source crater instances, no unknown regions. Absence is not inferred from the IMP mask, which has no crater class. Development control only."
+    }
+  ]
+}

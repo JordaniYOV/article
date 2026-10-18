@@ -1,0 +1,70 @@
+schema_version = "crater-annotation-v1"
+status = "pilot_rules_defined_dev_review_and_test_freeze_pending"
+date = "2026-10-14"
+protocol = "docs/protocols/crater_annotation_v1.md"
+scope = "orbital_300_v3_semantic_track_only"
+tasks = ["crater_presence_v1", "crater_center_v1", "crater_largest_location_v1", "crater_half_count_v1"]
+annotation_format = "COCO_instances_plus_per_image_review_sidecar"
+annotation_tool = "CVAT_or_equivalent"
+original_images_and_masks_immutable = true
+ground_truth_in_inference = false
+test_annotation_requires_frozen_rules = true
+inspect_model_answers_during_annotation = false
+converter_implemented = false
+annotations_acquired_or_manually_completed = false
+paired_ibm_admitted = false
+
+[objects]
+class_name = "crater"
+shape = "axis_aligned_tight_outer_rim_bbox"
+one_bbox_per_instance = true
+count_distinct_nested_craters = true
+semantic_connected_components_are_instances = false
+minimum_short_side_fraction = 0.04
+minimum_short_side_rounding = "ceil_fraction_times_min_native_image_dimension"
+size_threshold_inclusive = true
+coordinate_space = "native_unmodified_PNG_pixels"
+centre = "bbox_midpoint_without_rounding"
+largest_size_proxy = "sqrt_bbox_width_times_height_not_physical_diameter"
+physical_scale_claim = false
+
+[visibility]
+fully_within_frame_required_for_all_four_tasks = true
+image_border_margin_px = 1
+exclude_truncated = true
+exclude_unresolved_uncertain = true
+uncertain_possible_eligible_object_blocks_all_four_tasks = true
+infer_missing_rim_from_shadows = false
+
+[regions]
+rows = 3
+columns = 3
+numbering = "row_major_1_to_9"
+boundaries = "floor_k_dimension_over_3_half_open"
+boundary_assignment = "right_or_lower_cell"
+central_cell = 5
+half_boundary = "native_image_width_over_2"
+midline_assignment = "right"
+boundary_review_band_px = 2
+
+[answers]
+q1 = ["YES", "NO"]
+q2 = ["YES", "NO"]
+q3 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "NONE", "TIE"]
+q4 = ["LEFT", "RIGHT", "TIE"]
+q3_near_largest_fraction = 0.05
+q3_candidate_rule = "size_greater_or_equal_0.95_times_maximum_size"
+q3_tie_rule = "near_largest_candidates_in_multiple_grid_cells"
+q4_tie_rule = "exact_equal_integer_counts_including_zero_zero"
+unknown_reference = "unscored_annotation_state_not_model_label"
+
+[review]
+pilot_val_images_per_planet = 5
+required_image_fields = ["sample_id", "image_sha256", "source_split", "scene_group_id", "source_dataset", "source_revision", "license", "annotation_version", "annotator", "reviewer", "reviewed_at", "review_status", "complete_for_size_rule", "no_unresolved_possible_eligible_objects"]
+object_attributes = ["uncertain", "truncated"]
+completeness_requires_full_image_review = true
+empty_annotation_is_not_automatically_negative = true
+second_review_required_for_scoring = true
+deduplicate_by_review_not_automatic_iou_merge = true
+failed_review_preserves_source_split = true
+replace_failed_test_images_automatically = false

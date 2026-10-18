@@ -1,0 +1,5 @@
+# CPython 3.12 Linux only; install the exact CUDA 13.0 pair FIRST (see notebook).
+# Do not install into the SpaceLLaVA environment or Colab kernel.
+-r ibm-imp.txt
+terratorch==1.2.13
+pycocotools>=2.0.11,<3

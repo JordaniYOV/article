@@ -1,0 +1,139 @@
+schema_version = "crater-annotation-v2"
+status = "annotation_rules_fixed_after_val_pilots_reference_review_and_converter_pending"
+date = "2026-10-14"
+protocol = "docs/protocols/crater_annotation_v2.md"
+supersedes = "configs/crater_annotation_v1.toml"
+scope = "orbital_300_v3_semantic_track_Q1_Q4_only"
+tasks = ["crater_presence_v1", "crater_center_v1", "crater_largest_location_v1", "crater_half_count_v1"]
+annotation_rules_frozen = true
+freeze_scope = "annotation_and_reference_admission_rules_not_inference_prompts_or_model_thresholds"
+test_annotation_ready = true
+pilot_exports_received = true
+reference_review_complete = false
+complete_instances_available = false
+converter_implemented = false
+paired_ibm_admitted = false
+original_images_and_masks_immutable = true
+ground_truth_in_inference = false
+inspect_model_answers_during_annotation = false
+
+[objects]
+class_name = "crater"
+shape = "axis_aligned_tight_outer_rim_bbox"
+one_bbox_per_instance = true
+count_distinct_nested_craters = true
+semantic_connected_components_are_instances = false
+source_and_supplement_merge = "verified_instance_ids_and_manual_duplicate_review"
+minimum_short_side_fraction = 0.04
+minimum_short_side_rounding = "ceil_fraction_times_min_native_image_dimension"
+size_threshold_inclusive = true
+coordinate_space = "native_unmodified_image_geometry"
+centre = "bbox_midpoint_without_rounding"
+largest_size_proxy = "sqrt_bbox_width_times_height_not_physical_diameter"
+physical_scale_claim = false
+keep_subthreshold_and_truncated_annotations = true
+reshape_bbox_to_pass_filters = false
+
+[visibility]
+fully_within_frame_required_for_all_four_tasks = true
+image_border_margin_px = 1
+exclude_truncated = true
+confirmed_objects_require_uncertain_false = true
+uncertain_possible_eligible_object_blocks_all_four_tasks = false
+uncertain_object_is_not_a_negative = true
+infer_missing_rim_from_shadows = false
+classification_from_shadow_alone = false
+
+[regions]
+rows = 3
+columns = 3
+numbering = "row_major_1_to_9"
+boundaries = "floor_k_dimension_over_3_half_open"
+boundary_assignment = "right_or_lower_cell"
+central_cell = 5
+half_boundary = "native_image_width_over_2"
+midline_assignment = "right"
+boundary_review_band_px = 2
+
+[answers]
+q1 = ["YES", "NO"]
+q2 = ["YES", "NO"]
+q3 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "NONE", "TIE"]
+q4 = ["LEFT", "RIGHT", "TIE"]
+q3_near_largest_fraction = 0.05
+q3_candidate_rule = "size_greater_or_equal_0.95_times_maximum_size"
+q3_tie_rule = "near_largest_candidates_in_multiple_grid_cells"
+q4_tie_rule = "exact_equal_integer_counts_including_zero_zero"
+unknown_reference = "unscored_annotation_state_not_model_label"
+
+[uncertainty]
+policy = "question_level_answer_invariance"
+admit_if = "one_identical_answer_under_all_conservatively_admissible_interpretations"
+uncertain_boxes_are_exact_geometry_bounds = false
+default_uncertainty_scope = "class_and_geometry_unbounded_until_reviewed"
+class_only_scope_requires_confirmed_geometry_and_single_instance = true
+geometry_bounds_require_explicit_review = true
+remove_uncertain_to_make_reference = false
+ambiguous_question_status = "UNKNOWN_REFERENCE"
+ambiguous_question_in_accuracy_denominator = false
+ambiguous_question_counts_as_model_error = false
+unresolved_but_definitely_ineligible_objects_block_scoring = false
+
+[missing_visual_evidence]
+policy = "record_unknown_regions_and_assess_each_question"
+source_label_in_missing_region_is_confirmed_visual_truth = false
+uniform_pixels_automatically_mean_no_data = false
+unknown_region_empty_means_no_craters = false
+assume_finite_crater_count_without_evidence = false
+preserve_publisher_annotation = true
+record_uncertainty_in_review_sidecar = true
+
+[cvat]
+object_label = "crater"
+object_attributes = ["uncertain", "truncated"]
+review_label = "image_review"
+review_label_type = "tag"
+result_attribute = "result"
+result_values = ["not_reviewed", "source_complete", "supplemented", "no_eligible_craters", "needs_review"]
+default_result = "not_reviewed"
+completeness_attribute = "complete_for_size_rule"
+default_complete = false
+unused_unknown_enum_options_are_not_image_annotations = true
+used_unknown_enum_policy = "validation_error_no_silent_normalization"
+lossless_review_export = "CVAT_for_images_1.1"
+optional_geometry_export = "COCO_instances"
+source_complete_means_no_supplement_not_no_objects = true
+needs_review_is_not_automatic_whole_image_exclusion = true
+
+[review]
+required_image_fields = ["sample_id", "source_image_sha256", "annotation_image_sha256", "source_split", "scene_group_id", "source_dataset", "source_revision", "license", "annotation_version", "annotator", "reviewer", "reviewed_at", "review_status", "complete_for_size_rule", "uncertainty_accounted_for", "unknown_regions"]
+required_question_fields = ["task_id", "annotation_version", "reference_status", "reference_answer", "admission_reason"]
+accepted_image_requires_full_review = true
+accepted_image_requires_uncertainty_accounted_for = true
+accepted_image_requires_no_uncertain_objects = false
+second_review_required_for_scoring = true
+empty_annotation_is_not_automatically_negative = true
+deduplicate_by_review_not_automatic_iou_merge = true
+source_instances_required_before_scoring = true
+failed_review_preserves_source_split = true
+replace_failed_test_images_automatically = false
+
+[comparisons]
+admission_independent_of_model_answers = true
+same_question_scene_pool_for_paired_models = true
+clean_reference_admission_preserved_across_corruptions = true
+evidence_hidden_by_corruption_relabels_clean_reference = false
+report_candidate_admitted_unscored_counts = true
+denominator_grain = "planet_task_source_split_condition_with_scene_group_uncertainty"
+
+[[pilot_exports]]
+name = "moon_craters_val_v1.zip"
+sha256 = "6bf2791ca7db26ef53503a1843a1c3e4e4fcb04c666101f4c173b78305c80f3f"
+source_val_images = 33
+accepted_ground_truth = false
+
+[[pilot_exports]]
+name = "mars_craters_val_v1.zip"
+sha256 = "a56efefddc683f71374eadb2adfe087dace055d7aae00749247e3ca3ca331a2f"
+source_val_images = 17
+accepted_ground_truth = false

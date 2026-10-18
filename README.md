@@ -82,8 +82,8 @@ rover-view кадров.
 [deploy/README.md](deploy/README.md). GPU-профили пока не прошли smoke test;
 requirements не устанавливает Windows C++ runtime, драйвер или веса.
 
-Создано отдельное рабочее окружение `.venv-benchmark` (Python 3.12). В нём
-проект установлен editable с Pillow/NumPy. Старое `.venv` остаётся неисправным.
+Рабочее окружение — `.venv-benchmark` (Python 3.12), проект установлен editable.
+Старое неработающее `.venv` удалено при очистке 15 октября 2026.
 
 ```powershell
 $benchmarkPython = ".\.venv-benchmark\Scripts\python.exe"
@@ -194,6 +194,23 @@ admission перед научным benchmark. Run TOML предназначен
 он не доказывает, что checkpoint/dataset прошёл admission или leakage audit.
 
 ## Проверка реализации
+
+Диагностика SpaceLLaVA в Colab: [текущий ноутбук](notebooks/spacellava_language_colab.ipynb)
+обновлён для [FP16/NF4-контроля v12](docs/protocols/spacellava_precision_v1.md):
+два прежних val-снимка, 16 запросов на режим, два последовательных процесса на
+одной GPU. Нужна минимум 32 GiB свободной VRAM по preflight, не T4/16 GB.
+Pinned native builder запускается без адаптера/runner, без offload/fallback.
+Нужны `spacellava_precision_v12.zip` и прежний ZIP результата v10 (только для
+фиксации входов и checkpoint identity). Старый NF4 на T4 не заменяет новую ветку.
+V7/v8 показали различающиеся описания, но зависимость закрытого ответа от первого
+варианта; [v9](docs/protocols/spacellava_fresh_process_v1.md) воспроизвёл те же
+четыре ответа при независимых загрузках без прошлой истории. Это наблюдения
+в 4-bit конфигурации, не установленная причина. Предыдущие notebooks с выводами
+сохранены в резервных копиях. В v10 повторились ответы на разные изображения;
+разные logits сами по себе не означают разные greedy-ответы и не устанавливают
+причину. V11 воспроизвёл все 16 ответов/токенов без нашего адаптера; GPU-запуск
+нового v12 ещё не выполнен. Научный benchmark не
+допускается автоматически; основные вопросы, эталоны и результаты не менялись.
 
 FastAPI backend с SQLModel/SQLite: [`инструкция`](src/api/README.md).
 Запуск: `python -m uvicorn api.main:app --reload`.
