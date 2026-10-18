@@ -1,18 +1,48 @@
-param([switch]$Install)
+param([switch]$Install, [switch]$CheckUv)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-if (-not $Install) {
-    Write-Output 'No changes made. Use -Install to create .venv-heads3060 and install Windows dependencies (not model weights).'
+
+function Test-UvLauncher {
+    param([string]$Executable, [string[]]$Prefix)
+    try {
+        $probeArguments = @($Prefix) + @('--version')
+        & $Executable @probeArguments *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+
+function Resolve-UvLauncher {
+    # Use the Python module when pip installed uv outside PATH. Keep arguments
+    # separate: executable paths may contain spaces; never use Invoke-Expression.
+    $nativeUv = Get-Command uv -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($nativeUv -and (Test-UvLauncher -Executable $nativeUv.Source -Prefix @())) {
+        return [pscustomobject]@{ Executable = $nativeUv.Source; Prefix = @(); Description = 'uv from PATH' }
+    }
+    foreach ($pythonName in @('py', 'python')) {
+        $pythonLauncher = Get-Command $pythonName -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($pythonLauncher -and (Test-UvLauncher -Executable $pythonLauncher.Source -Prefix @('-m', 'uv'))) {
+            return [pscustomobject]@{ Executable = $pythonLauncher.Source; Prefix = @('-m', 'uv'); Description = "$pythonName -m uv" }
+        }
+    }
+    throw 'uv is unavailable via PATH, py -m uv, and python -m uv. Install it in your Python environment (py -m pip install --user uv), then verify py -m uv --version.'
+}
+
+if (-not $Install -and -not $CheckUv) {
+    Write-Output 'No changes made. Use -CheckUv for a read-only uv check, or -Install to create .venv-heads3060 and install Windows dependencies (not model weights).'
     exit 0
 }
 if ($env:OS -ne 'Windows_NT') { throw 'This installer is for native Windows x64.' }
-if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    throw 'Install uv first: py -m pip install --user uv. Reopen the terminal, then rerun.'
+$uvLauncher = Resolve-UvLauncher
+Write-Output "Using $($uvLauncher.Description): $($uvLauncher.Executable)"
+if ($CheckUv -and -not $Install) {
+    Write-Output 'uv check passed. No environment created, dependencies installed, or weights downloaded.'
+    exit 0
 }
 $headEnvironment = Join-Path $projectRoot '.venv-heads3060'
 $headPython = Join-Path $headEnvironment 'Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $headPython)) {
-    & uv venv --seed --python 3.12.14 $headEnvironment
+    $uvArguments = @($uvLauncher.Prefix) + @('venv', '--seed', '--python', '3.12.14', $headEnvironment)
+    & $uvLauncher.Executable @uvArguments
     if ($LASTEXITCODE -ne 0) { throw 'Could not create Python 3.12.14 environment.' }
 }
 & $headPython -c 'import sys; assert sys.version_info[:3] == (3,12,14), sys.version'

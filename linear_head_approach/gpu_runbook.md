@@ -13,7 +13,8 @@ Toolkit/Visual Studio не требуется для использования 
 
 ```powershell
 py -m pip install --user uv
-# Открой новый терминал, если uv не появился в PATH.
+# Если uv не появился в PATH, installer попробует py -m uv / python -m uv.
+powershell -ExecutionPolicy Bypass -File linear_head_approach/setup_windows.ps1 -CheckUv
 powershell -ExecutionPolicy Bypass -File linear_head_approach/setup_windows.ps1 -Install
 $headPython = '.\.venv-heads3060\Scripts\python.exe'
 & $headPython -B -m linear_head_approach doctor
