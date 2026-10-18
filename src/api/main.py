@@ -171,6 +171,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         values = payload.model_dump()
         return commit(session, DatasetConfig.model_validate({**values, "config_sha256": fingerprint(values)}))
 
+    @application.post("/datasets/crater-segmentation/register", response_model=list[DatasetConfigRead], tags=["datasets"])
+    def register_crater_datasets(session: SessionDep):
+        from .head_datasets import register_crater_collection
+        return register_crater_collection(session, fingerprint)
+
     @application.get("/dataset-configs", response_model=list[DatasetConfigRead], tags=["dataset configs"])
     def list_dataset_configs(session: SessionDep, offset: Offset = 0, limit: Limit = 100):
         return session.exec(select(DatasetConfig).order_by(DatasetConfig.id).offset(offset).limit(limit)).all()

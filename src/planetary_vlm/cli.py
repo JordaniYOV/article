@@ -37,6 +37,14 @@ def main(argv: list[str] | None = None) -> int:
     crater_verify = commands.add_parser("crater-verify", help="Verify a crater annotation version without inference or auto-acceptance")
     crater_verify.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
     crater_verify.add_argument("--dataset", required=True)
+    crater_seg = commands.add_parser("crater-seg-build", help="Collect new 50 Moon + 50 Mars publisher crater masks, excluding orbital_300_v3; no models")
+    crater_seg.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    crater_seg.add_argument("--output", default="data_orbital/crater_seg_100_v1")
+    crater_seg.add_argument("--allow-download", action="store_true", help="Explicitly fetch selected native tiles and their containing Mars test shard")
+    crater_seg.add_argument("--source-cache", help="Optional verified prior sources directory inside data_orbital")
+    crater_seg_verify = commands.add_parser("crater-seg-verify", help="Verify crater-only collection sources, masks and original-collection exclusions offline")
+    crater_seg_verify.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    crater_seg_verify.add_argument("--dataset", default="data_orbital/crater_seg_100_v1")
     run_parser = commands.add_parser("run", help="Run one configured backend serially")
     run_parser.add_argument("--config", required=True)
     run_parser.add_argument("--resume", action="store_true")
@@ -138,7 +146,12 @@ def main(argv: list[str] | None = None) -> int:
             action.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "crater-verify":
+        if args.command in {"crater-seg-build", "crater-seg-verify"}:
+            from planetary_vlm.datasets.crater_segmentation import build_collection, verify_collection
+            result = (build_collection(args.workspace, args.output, allow_download=args.allow_download, source_cache=args.source_cache)
+                      if args.command == "crater-seg-build" else verify_collection(args.workspace, args.dataset))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.command == "crater-verify":
             from planetary_vlm.datasets.crater_annotations import verify_crater_build
             print(json.dumps(verify_crater_build(args.workspace, args.dataset), ensure_ascii=False, indent=2))
         elif args.command == "crater-questions":

@@ -22,10 +22,11 @@ export default function RunPanel({ datasets, models, runs, modelId, datasetId, s
   const builtinSubset = builtinPlanet?.subsets.find((item) => item.id === builtinSelection?.subset);
   const locked = !!reuseId;
   const trainedHead = model?.backend === 'frozen_crater';
+  const missingVis = trainedHead && model?.model_id.startsWith('frozen/ibm/') && dataset?.preprocessing.input_protocol === 'frozen-crater-image-clean-v2' && dataset?.provenance.native_vis5_available === false;
   useEffect(() => {
-    if (trainedHead && !locked) setProtocol({ ...protocol, split: 'val', include_clean: true, distortions: [], parameters: {},
+    if (trainedHead && !locked) setProtocol({ ...protocol, split: dataset?.splits.includes('test') && !dataset.splits.includes('val') ? 'test' : 'val', include_clean: true, distortions: [], parameters: {},
       prompt: 'Segment publisher catalog crater polygons.', allowed_answers: [] });
-  }, [trainedHead, locked]);
+  }, [trainedHead, locked, dataset?.id]);
   const splitCounts = dataset?.provenance.split_counts as Record<string, number> | undefined;
   const sampleCount = splitCounts?.[protocol.split] ?? dataset?.provenance.sample_count;
   const sampleLimit = typeof sampleCount === 'number' && sampleCount > 0 ? Math.min(10000, sampleCount) : 10000;
@@ -33,7 +34,7 @@ export default function RunPanel({ datasets, models, runs, modelId, datasetId, s
   const valid = model?.enabled && dataset && (!builtinSelection || (builtinSubset?.status === 'ready' && builtinSubset.dataset_id === datasetId)) && protocol.image_count >= 1 && protocol.image_count <= sampleLimit &&
     Number.isInteger(protocol.image_count) && Number.isInteger(protocol.seed) && protocol.seed >= 0 &&
     protocol.seed <= 2**32 - 1 && variants > 0 && protocol.prompt.trim() && dataset.splits.includes(protocol.split) &&
-    (!trainedHead || (dataset.task_id === 'catalog_crater_segmentation' && protocol.include_clean && !protocol.distortions.length && !protocol.allowed_answers.length));
+    (!trainedHead || (!missingVis && dataset.task_id === 'catalog_crater_segmentation' && protocol.include_clean && !protocol.distortions.length && !protocol.allowed_answers.length));
   function toggle(chain: Effect[]) {
     const exists = protocol.distortions.some((value) => value.join('+') === chain.join('+'));
     setProtocol({ ...protocol, distortions: exists ? protocol.distortions.filter((value) => value.join('+') !== chain.join('+')) : [...protocol.distortions, chain] });
@@ -94,7 +95,7 @@ export default function RunPanel({ datasets, models, runs, modelId, datasetId, s
             {(['test', 'val'] as const).filter((value) => !dataset || dataset.splits.includes(value)).map((value) => <option key={value} value={value}>{value}</option>)}
           </select></label><label>Seed<input type="number" min={0} max={2**32 - 1} required value={protocol.seed} onChange={(event) => setProtocol({ ...protocol, seed: Number(event.target.value) })} /></label></div>
         {protocol.image_count > sampleLimit && <p className="warning-text">{splitCounts ? `В выборке ${protocol.split} доступно` : 'В датасете всего'} {sampleLimit} снимков. Уменьшите выборку.</p>}
-        {trainedHead ? <div className="inline-info">Только clean WAC catalog segmentation. Выберите подключённую WAC_catalog_craters_heads. Искажения и Q1–Q4 не поддержаны: native VIS5 IBM и RGB CLIP требуют отдельного протокола.</div> : <div className="distortion-box"><div className="control-heading"><Settings2 size={16} /><strong>Условия эксперимента</strong></div>
+        {trainedHead ? <div className="inline-info">Clean-сегментация кратеров: прежняя WAC-выборка или подключённая crater_seg_100_v1. CLIP принимает RGB Луны и Марса; IBM требует настоящие пять каналов VIS5. Вопросы и искажения в этом режиме не используются.</div> : <div className="distortion-box"><div className="control-heading"><Settings2 size={16} /><strong>Условия эксперимента</strong></div>
           <label className="checkbox-label clean-toggle"><input type="checkbox" checked={protocol.include_clean} onChange={(event) => setProtocol({ ...protocol, include_clean: event.target.checked })} />Оригинальные снимки<span className="mini-tag">baseline</span></label>
           <div className="effect-grid">{EFFECTS.map((effect) => <label key={effect.id} title={effect.hint} className={`effect-pill ${selected([effect.id]) ? 'selected' : ''}`}>
             <input type="checkbox" checked={selected([effect.id])} onChange={() => toggle([effect.id])} /><span className="pill-check">{selected([effect.id]) && <Check size={11} />}</span>{effect.label}</label>)}</div>
@@ -117,6 +118,7 @@ export default function RunPanel({ datasets, models, runs, modelId, datasetId, s
         </div></details>}
       </fieldset>
       {model && !model.enabled && <p className="warning-text">Включите запуск в настройках модели.</p>}
+      {missingVis && <p className="warning-text">У марсианских PNG нет пяти каналов VIS5 для текущей IBM-головы. Выберите CLIP или лунную выборку; каналы не подменяются копиями RGB.</p>}
       {model?.backend === 'mock' && <p className="warning-text">Тестовый адаптер: ответы не являются научными результатами.</p>}
       <div className="run-estimate"><span>{protocol.image_count > 0 ? protocol.image_count : '—'} снимков × {variants} условий</span><strong>{protocol.image_count * variants || 0} ответов</strong></div>
       <button className="primary-button full-width launch-button" disabled={!!pending || !valid}>

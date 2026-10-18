@@ -6,6 +6,11 @@ import { model } from './fixtures';
 describe('FastAPI client', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => { fetchMock = vi.fn().mockImplementation(async () => new Response('{}', { status: 202 })); vi.stubGlobal('fetch', fetchMock); });
+  it('registers the existing crater collection without requesting downloads or training', async () => {
+    await api.registerCraters();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/datasets/crater-segmentation/register');
+    expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'POST' });
+  });
   it('resolves exactly the selected planet and subset on the backend', async () => {
     await api.ensureBuiltin({ planet: 'moon', subset: 'height' });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/datasets/builtin/moon/ensure');

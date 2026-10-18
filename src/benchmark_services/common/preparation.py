@@ -44,8 +44,9 @@ def expected_requests(run):
         for condition, chain in variants(run.protocol):
             request_id = digest([source["sample_id"], condition])
             modalities = ()
-            from planetary_vlm.heads_contract import TASK
-            if run.protocol["task_id"] == TASK:
+            from planetary_vlm.heads_contract import TASK, TRANSFER_PROTOCOL
+            if run.protocol["task_id"] == TASK and (source.get("native_vis") or
+                    run.protocol.get("preprocessing", {}).get("input_protocol") != TRANSFER_PROTOCOL):
                 native = paths.orbital_path(source["native_vis"])
                 if file_hash(native) != source["native_vis_sha256"]:
                     raise ValueError("Paired native VIS input changed")

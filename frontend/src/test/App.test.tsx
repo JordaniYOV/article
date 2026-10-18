@@ -6,7 +6,7 @@ import { api } from '../api';
 import { dataset, model, report, run } from './fixtures';
 
 vi.mock('../api', () => ({ assetUrl: (path: string) => '/api' + path,
-  api: Object.fromEntries(['health', 'datasets', 'builtins', 'ensureBuiltin', 'models', 'runs', 'defaults', 'importHead', 'upload', 'fromUrl', 'saveDataset', 'saveModel',
+  api: Object.fromEntries(['health', 'datasets', 'builtins', 'ensureBuiltin', 'models', 'runs', 'defaults', 'importHead', 'registerCraters', 'upload', 'fromUrl', 'saveDataset', 'saveModel',
     'deleteDataset', 'deleteModel', 'start', 'control', 'metrics', 'report', 'results', 'compare'].map((key) => [key, vi.fn()])) }));
 // Chart math/values are tested separately; jsdom has no browser layout engine.
 vi.mock('recharts', async () => {
@@ -27,6 +27,30 @@ beforeEach(() => {
 });
 
 describe('evaluation workspace', () => {
+  it('connects local crater datasets with the dedicated registration action', async () => {
+    vi.mocked(api.registerCraters).mockResolvedValue([dataset]);
+    const user = userEvent.setup(); render(<App />);
+    await screen.findByText('Бэкенд подключён');
+    await user.click(screen.getByRole('button', { name: 'Подключить crater_seg_100_v1' }));
+    await waitFor(() => expect(api.registerCraters).toHaveBeenCalledExactlyOnceWith());
+  });
+  it('allows the external Mars RGB collection for CLIP and selects its original test split', async () => {
+    const head = { ...model, backend: 'frozen_crater', model_id: 'frozen/spacellava/spatial' };
+    const mars = { ...dataset, planet: 'mars' as const, task_id: 'catalog_crater_segmentation', splits: ['test'],
+      preprocessing: { input_protocol: 'frozen-crater-image-clean-v2' }, provenance: { native_vis5_available: false, split_counts: { test: 50 } } };
+    vi.mocked(api.models).mockResolvedValue([head]); vi.mocked(api.datasets).mockResolvedValue([mars]);
+    vi.mocked(api.start).mockResolvedValue(run);
+    const user = userEvent.setup(); render(<App />); await screen.findByText('Бэкенд подключён');
+    await user.click(screen.getByRole('button', { name: 'Запустить сбор ответов' }));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith(head, mars.id, expect.objectContaining({ split: 'test', distortions: [], allowed_answers: [] }), undefined));
+  });
+  it('explains the actual missing IBM channels instead of claiming only WAC IDs are allowed', async () => {
+    vi.mocked(api.models).mockResolvedValue([{ ...model, backend: 'frozen_crater', model_id: 'frozen/ibm/spatial' }]);
+    vi.mocked(api.datasets).mockResolvedValue([{ ...dataset, planet: 'mars', task_id: 'catalog_crater_segmentation', splits: ['test'],
+      preprocessing: { input_protocol: 'frozen-crater-image-clean-v2' }, provenance: { native_vis5_available: false } }]);
+    render(<App />); await screen.findByText(/У марсианских PNG нет пяти каналов VIS5/);
+    expect(screen.getByRole('button', { name: 'Запустить сбор ответов' })).toBeDisabled();
+  });
   it('defaults trained crater heads to clean val with no questions or corruption controls', async () => {
     const head = { ...model, backend: 'frozen_crater', name: 'IBM-spatial-13' };
     const wac = { ...dataset, task_id: 'catalog_crater_segmentation', name: 'WAC_catalog_craters_heads', provenance: { split_counts: { val: 39, test: 31 } } };
@@ -35,7 +59,7 @@ describe('evaluation workspace', () => {
     vi.mocked(api.start).mockResolvedValue(run);
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Бэкенд подключён');
-    await screen.findByText(/Только clean WAC catalog segmentation/);
+    await screen.findByText(/Clean-сегментация кратеров/);
     expect(screen.queryByLabelText('Вопрос модели')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Комбинация всех четырёх')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Запустить сбор ответов' }));

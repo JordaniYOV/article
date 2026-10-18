@@ -1,5 +1,28 @@
 # Orbital 300 v4
 
+## Additional crater-only collection
+
+`crater_seg_100_v1/` is a separate 50 Moon + 50 Mars publisher-test collection
+requested on 18 October 2026. It has binary crater masks, SHA-256 manifests and
+overlap audits against the old v3/v4 images. Lunar native VIS5 is retained; Mars
+does not provide VIS5. Shared Mars parent mosaics are documented, not presented
+as new independent regions. It does not replace the original 300-image tracks
+or automatically become compatible with existing model deployments. See
+[`crater_seg_100_v1.md`](../docs/research/crater_seg_100_v1.md).
+Native Mars mosaic strips and four empty publisher masks are documented in
+`crater_seg_100_v1/visual_qa.json`; image/mask identity verification is not a
+claim that every image is artifact-free or every visible crater is annotated.
+
+The UI button **Подключить crater_seg_100_v1** / API
+`POST /datasets/crater-segmentation/register` now connects the existing local
+collection as separate Moon/Mars test datasets for unchanged frozen heads.
+The external clean-input protocol removes the old deployment image allowlist:
+CLIP takes RGB on both planets; the current IBM VIS5 encoder can use the lunar
+part only. No channel replication, training, downloads or source edits occur.
+See [`API guide`](../src/api/README.md) for restart/new-run instructions.
+
+## Original orbital collection
+
 The active collection is [`orbital_300_v4/`](orbital_300_v4/). It has **300 distinct real orbital images**: 100 Moon and 100 Mars evaluation images, plus 50 Moon and 50 Mars train images. Each planet's evaluation set has 50 image/pixel-mask pairs and a separate 50 image/elevation-map pairs. The train images have both a publisher mask and a height array. `audit.json` and six JSONL manifests list exact files, source IDs, original splits, revisions, checksums, label semantics, and display transforms.
 
 Only `mars_seg_018/image.png` changed from v3: a real THEMIS v11 crop was

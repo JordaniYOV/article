@@ -51,6 +51,7 @@ export const api = {
   runs: (signal?: AbortSignal) => all<Run>('/runs', signal),
   defaults: () => request('/configurations/import-defaults', json()),
   importHead: (value: unknown) => request<{ model_id: number; dataset_id: number; clean_only: boolean }>('/head-deployments', json(value)),
+  registerCraters: () => request<Dataset[]>('/datasets/crater-segmentation/register', json()),
   upload: (file: File, metadata: DatasetMetadata) => {
     const body = new FormData(); body.append('file', file); body.append('metadata', JSON.stringify(metadata));
     return request<Dataset>('/datasets/upload', { method: 'POST', body });

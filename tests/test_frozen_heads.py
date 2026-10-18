@@ -218,6 +218,113 @@ class FrozenHeadsTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-B", "-c", script], cwd=ROOT, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def external_collection(self):
+        for planet, color in (("moon", 90), ("mars", 180)):
+            folder = self.root / "data_orbital/crater_seg_100_v1" / planet
+            folder.mkdir(parents=True, exist_ok=True)
+            image = folder / "image.png"
+            Image.new("RGB", (512, 512), (color, 10, 20)).save(image)
+            source = self.targets[2].copy()
+            source.update(sample_id=f"external_{planet}", scene_group_id=f"new_{planet}_group", planet=planet,
+                image=str(image), image_sha256=file_hash(image), rgb_pixels_sha256=pixel_hash(image, size_bound=True),
+                classes=["Background", "Crater"])
+            if planet == "mars":
+                source.pop("native_vis")
+                source.pop("native_vis_sha256")
+                source["mask_semantics"] = "publisher_binary_crater_segmentation"
+            atomic_json(folder / "manifest.jsonl", [source], lines=True)
+        response = self.client.post("/datasets/crater-segmentation/register")
+        self.assertEqual(response.status_code, 200, response.text)
+        return {r["planet"]: r for r in response.json()}
+
+    def use_clip_deployment(self):
+        path = self.folder / "deployment.json"
+        data = json.loads(path.read_text())
+        data["encoder"] = "spacellava"
+        atomic_json(path, data)
+        self.pointer.update(sha256=file_hash(path), name="synthetic-head-clip")
+
+    def test_external_collection_registration_is_atomic_and_idempotent(self):
+        first = self.external_collection()
+        second = self.client.post("/datasets/crater-segmentation/register").json()
+        self.assertEqual({r["planet"]: r["id"] for r in second}, {p: r["id"] for p, r in first.items()})
+        self.assertEqual(first["mars"]["splits"], ["test"])
+        self.assertFalse(first["mars"]["provenance"]["native_vis5_available"])
+        self.assertTrue(first["moon"]["provenance"]["native_vis5_available"])
+
+    def test_external_registration_does_not_partially_register_missing_planet(self):
+        # Moon validation succeeds, Mars is absent: no half-complete DB import.
+        folder = self.root / "data_orbital/crater_seg_100_v1/moon"
+        folder.mkdir(parents=True)
+        row = self.targets[2] | {"planet": "moon", "classes": ["Background", "Crater"]}
+        atomic_json(folder / "manifest.jsonl", [row], lines=True)
+        response = self.client.post("/datasets/crater-segmentation/register")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(self.client.get("/dataset-configs").json(), [])
+
+    def test_external_lunar_input_no_longer_needs_old_allowlisted_id(self):
+        datasets = self.external_collection()
+        response = self.client.post("/vit/runs", json=self.payload(dataset_id=datasets["moon"]["id"], image_count=1))
+        self.assertEqual(response.status_code, 202, response.text)
+        with Session(self.app.state.engine) as session:
+            run = session.get(Run, response.json()["id"])
+            self.assertEqual(run.samples[0]["sample_id"], "external_moon")
+            requests, _, _ = prepare_bundle(run)
+        self.assertEqual(requests[0].modality_paths[0][0], "vis")
+
+    def test_ibm_mars_is_rejected_for_missing_channels_not_wac_allowlist(self):
+        datasets = self.external_collection()
+        response = self.client.post("/vit/runs", json=self.payload(dataset_id=datasets["mars"]["id"], image_count=1))
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("VIS5", response.json()["detail"])
+        self.assertEqual(self.client.get("/runs").json(), [])
+
+    def test_clip_mars_queue_preparation_and_scoring_without_fake_vis_or_gt_leak(self):
+        datasets = self.external_collection()
+        self.use_clip_deployment()
+        response = self.client.post("/vit/runs", json=self.payload(dataset_id=datasets["mars"]["id"], image_count=1))
+        self.assertEqual(response.status_code, 202, response.text)
+        run_id = response.json()["id"]
+        with Session(self.app.state.engine) as session:
+            requests, _, _ = prepare_bundle(session.get(Run, run_id))
+        self.assertEqual(requests[0].modality_paths, ())
+        self.assertNotIn("mask", json.dumps(requests[0].__dict__))
+        from benchmark_services.common.fixtures import ServiceFixture
+        with patch("benchmark_services.common.fixtures.ServiceFixture", wraps=ServiceFixture) as factory:
+            self.assertTrue(run_selected(self.settings, run_id, ("frozen_crater",), mock_mode=True))
+        options = factory.call_args.args[1]
+        inputs = options["transfer_inputs"]
+        self.assertNotIn("mask", json.dumps(inputs))
+        self.assertNotIn("reference_status", json.dumps(inputs))
+        self.assertNotIn("native_vis", inputs[0])
+        response = self.client.post(f"/runs/{run_id}/metrics")
+        self.assertEqual(response.status_code, 200, response.text)
+        quality = response.json()["metrics"]["conditions"]["clean"]["quality"]
+        self.assertEqual(quality["n_scored_images"], 1)
+        self.assertTrue(response.json()["mock"])
+
+    def test_external_manifest_tampering_rejected_before_queue(self):
+        datasets = self.external_collection()
+        path = Path(datasets["moon"]["manifest_path"])
+        path.write_text(path.read_text() + "\n", encoding="utf-8")
+        response = self.client.post("/vit/runs", json=self.payload(dataset_id=datasets["moon"]["id"], image_count=1))
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("manifest changed", response.json()["detail"])
+
+    def test_external_input_contract_preserves_train_and_image_integrity_guards(self):
+        from planetary_vlm.heads_contract import transfer_input, reject_training_overlap
+        row = self.targets[2]
+        with self.assertRaisesRegex(ValueError, "held-out"):
+            transfer_input(row | {"source_split": "train"}, self.root)
+        with self.assertRaisesRegex(ValueError, "SHA-256"):
+            transfer_input(row | {"image_sha256": "0" * 64}, self.root)
+        folder = self.root / "data_orbital/head_training_v2"
+        folder.mkdir(parents=True)
+        atomic_json(folder / "inputs.jsonl", [{"sample_id": "a_train_image", "split": "train",
+                    "rgb_image_sha256": row["image_sha256"]}], lines=True)
+        with self.assertRaisesRegex(ValueError, "training images"):
+            reject_training_overlap([row], self.root)
+
 
 if __name__ == "__main__":
     unittest.main()

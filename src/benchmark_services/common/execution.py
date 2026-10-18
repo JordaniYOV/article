@@ -204,6 +204,14 @@ def execute(engine, run_id, *, mock_mode=False, prepared_only=False):
             random.seed(protocol["seed"])
             np.random.seed(protocol["seed"])
             options = {**model.options, "seed": protocol["seed"], "local_files_only": True}
+            if model.backend == "frozen_crater":
+                from planetary_vlm.heads_contract import TRANSFER_PROTOCOL, transfer_input
+                # Run-owned input provenance must never come from model config.
+                options.pop("transfer_protocol", None)
+                options.pop("transfer_inputs", None)
+                if protocol.get("preprocessing", {}).get("input_protocol") == TRANSFER_PROTOCOL:
+                    options["transfer_protocol"] = TRANSFER_PROTOCOL
+                    options["transfer_inputs"] = [transfer_input(row, paths.WORKSPACE_ROOT) for row in run.samples]
             if model.backend in {"ibm_imp", "frozen_crater"}:
                 options["artifact_dir"] = str(folder / "maps")
             if mock_mode and model.backend != "mock":

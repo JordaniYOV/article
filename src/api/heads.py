@@ -6,7 +6,7 @@ from collections import defaultdict
 from fastapi import HTTPException
 from sqlmodel import select
 
-from planetary_vlm.heads_contract import TASK, INPUT_PROTOCOL, CLASSES, read_deployment
+from planetary_vlm.heads_contract import TASK, INPUT_PROTOCOL, TRANSFER_PROTOCOL, CRATER_SEMANTICS, CLASSES, read_deployment
 from benchmark_services.common import settings as paths
 from benchmark_services.common.files import file_hash
 from benchmark_services.common.store import ModelConfig, ModelConfigCreate, DatasetConfig, DatasetConfigCreate
@@ -64,7 +64,10 @@ def score_maps(results, sources, run, chain):
         if source.get("reference_status") != "ready":
             withheld += 1
             continue
-        if source.get("mask_semantics") != "catalog_crater_polygon" or source.get("classes") != CLASSES:
+        external = run.protocol.get("preprocessing", {}).get("input_protocol") == TRANSFER_PROTOCOL
+        allowed_classes = [CLASSES, ["Background", "Crater"]] if external else [CLASSES]
+        semantics = CRATER_SEMANTICS if external else {"catalog_crater_polygon"}
+        if source.get("mask_semantics") not in semantics or source.get("classes") not in allowed_classes:
             raise ValueError("Catalog heads require catalog crater masks, not IMP/terrain labels")
         mask = paths.orbital_path(source["mask"])
         if file_hash(mask) != source["mask_sha256"]:
@@ -72,7 +75,7 @@ def score_maps(results, sources, run, chain):
         with Image.open(mask) as image:
             target = np.asarray(image)
         if target.shape != (512, 512) or not np.isin(target, [0, 1]).all():
-            raise ValueError("Expected binary native WAC catalog target")
+            raise ValueError("Expected binary 512x512 crater target")
         if row.status != "ok":
             continue
         artifacts = map_artifacts(row.raw_response, Path(run.output_dir))
@@ -98,7 +101,7 @@ def score_maps(results, sources, run, chain):
     return {"crater_iou": macro("iou"), "crater_dice": macro("dice"), "n_labelled_images": supported,
             "n_scored_images": len(per_image), "n_unscored_reference_images": withheld, "prediction_coverage": len(per_image) / supported,
             "reference_coverage": supported / len(results), "per_image": per_image, "averaging": "image within scene, then scene macro",
-            "reference_scope": "publisher catalog polygons; not a complete visible-crater census"}
+            "reference_scope": "publisher crater masks; not a complete visible-crater census"}
 
 
 def paired_scene_interval(left, right, seed):

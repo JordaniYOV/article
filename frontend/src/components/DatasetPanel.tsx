@@ -32,6 +32,13 @@ export default function DatasetPanel({ datasets, pending, perform, onSelect, err
     onSelect(dataset.id); setFile(null); setUrl(''); setName('');
   }, 'Датасет подключён');
   return <Panel id="datasets" icon={Database} title="Загрузка датасета" number="01">
+    <button type="button" className="secondary-button full-width" disabled={!!pending} onClick={() => void perform('craters', async () => {
+      const connected = await api.registerCraters();
+      if (connected.length) onSelect(connected[0].id);
+    }, 'Лунная и марсианская crater_seg_100_v1 подключены')}>
+      {pending === 'craters' ? <Busy>Проверка файлов…</Busy> : <><FolderOpen size={17} />Подключить crater_seg_100_v1</>}
+    </button>
+    <p className="field-note">Использует готовую локальную папку data_orbital/crater_seg_100_v1, без скачивания. CLIP: Луна и Марс; текущая IBM-голова: только снимки с native VIS5.</p>
     <div className="segmented" aria-label="Способ загрузки датасета">
       <button type="button" className={mode === 'file' ? 'active' : ''} onClick={() => setMode('file')}><FileArchive size={15} />Архив</button>
       <button type="button" className={mode === 'url' ? 'active' : ''} onClick={() => setMode('url')}><Link size={15} />По ссылке</button>

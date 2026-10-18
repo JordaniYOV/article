@@ -1,4 +1,4 @@
-"""Real frozen encoder + published local head, clean WAC input only, no targets."""
+"""Frozen encoder + unchanged local head; legacy and external clean inputs."""
 import json
 import os
 from pathlib import Path
@@ -6,7 +6,7 @@ import sys
 import time
 
 from planetary_vlm.contracts import ModelResponse
-from planetary_vlm.heads_contract import read_deployment, pixel_hash
+from planetary_vlm.heads_contract import TRANSFER_PROTOCOL, read_deployment, pixel_hash, transfer_input
 from ..common import settings as paths
 from ..common.files import file_hash
 
@@ -45,11 +45,18 @@ class FrozenCraterAdapter:
         self.mean = saved["mean"].to("cuda")[None, :, None, None]
         self.std = saved["std"].to("cuda")[None, :, None, None]
         self.inputs = {row["rgb_pixels_sha256"]: row for row in rows(path.parent / "encoder_inputs.jsonl")}
+        self.transfer = self.options.get("transfer_protocol") == TRANSFER_PROTOCOL
+        if self.transfer:
+            external = [transfer_input(row, root, data["encoder"]) for row in self.options["transfer_inputs"]]
+            self.inputs = {row["rgb_pixels_sha256"]: row for row in external}
+            if not external or len(self.inputs) != len(external):
+                raise ValueError("External head inputs must have unique image pixels")
         if any(r["split"] not in {"val", "test"} for r in self.inputs.values()):
             raise ValueError("Training samples cannot be served as benchmark scenes")
         return {"encoder": data["encoder"], "family": data["family"], "head_sha256": data["files_sha256"]["head.pt"],
                 "deployment_sha256": self.options["deployment_sha256"], "threshold": data["threshold"],
                 "code_compatibility": self.code_compatibility,
+                "evaluation_input_protocol": TRANSFER_PROTOCOL if self.transfer else data["input_protocol"],
                 "clean_only": True, "timing": "live_encoder_plus_head_excludes_initial_loading", "input_warning": data["input_warning"]}
 
     def predict(self, request):
@@ -63,13 +70,15 @@ class FrozenCraterAdapter:
         image = paths.orbital_path(request.image_paths[0])
         row = self.inputs.get(pixel_hash(image))
         if row is None:
-            raise ValueError("Only the admitted clean held-out WAC images are supported; no corruptions/train scenes")
+            raise ValueError("Image differs from the run's checked clean held-out inputs")
         native = dict(request.modality_paths).get("vis")
-        if not native or file_hash(paths.orbital_path(native)) != row["native_vis_sha256"]:
+        needs_native = self.deployment["encoder"] == "ibm" or not self.transfer
+        if needs_native and (not native or file_hash(paths.orbital_path(native)) != row.get("native_vis_sha256")):
             raise ValueError("Paired native VIS input is missing or changed")
         input_row = row | {"rgb_image": image.relative_to(paths.WORKSPACE_ROOT).as_posix(),
-                           "rgb_image_sha256": file_hash(image),
-                           "native_vis": paths.orbital_path(native).relative_to(paths.WORKSPACE_ROOT).as_posix()}
+                           "rgb_image_sha256": file_hash(image)}
+        if native:
+            input_row["native_vis"] = paths.orbital_path(native).relative_to(paths.WORKSPACE_ROOT).as_posix()
         torch.cuda.synchronize()
         begin = time.perf_counter()
         with torch.inference_mode():

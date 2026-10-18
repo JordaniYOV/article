@@ -67,17 +67,32 @@ def create_run(payload, kind, session):
                 raise ValueError("Reuse requires the same dataset, split, count, seed, prompt and distortion protocol")
             selected = other.samples
         if model.backend == "frozen_crater":
-            from planetary_vlm.heads_contract import TASK, INPUT_PROTOCOL, read_deployment, pixel_hash
-            if (dataset.task_id != TASK or dataset.planet != "moon" or dataset.preprocessing.get("input_protocol") != INPUT_PROTOCOL
+            from planetary_vlm.heads_contract import TASK, INPUT_PROTOCOL, TRANSFER_PROTOCOL, read_deployment, pixel_hash, transfer_input
+            input_protocol = dataset.preprocessing.get("input_protocol")
+            if (dataset.task_id != TASK or input_protocol not in {INPUT_PROTOCOL, TRANSFER_PROTOCOL}
                 or model.options.get("input_protocol") != INPUT_PROTOCOL or payload.distortions or not payload.include_clean or payload.allowed_answers):
-                raise ValueError("Trained heads require clean WAC catalog segmentation, no questions/corruptions; native VIS5 and RGB differ")
+                raise ValueError("Trained heads require clean binary crater segmentation without question answers/corruptions. "
+                                 "Connect the external crater collection or a declared frozen-head dataset")
             deployment_path, deployment = read_deployment(model.options["deployment_path"], model.options["deployment_sha256"], paths.WORKSPACE_ROOT)
+            if input_protocol == TRANSFER_PROTOCOL:
+                from planetary_vlm.heads_contract import reject_training_overlap, CRATER_SEMANTICS, CLASSES
+                expected_manifest = dataset.provenance.get("manifest_sha256")
+                if expected_manifest and file_hash(dataset.manifest_path) != expected_manifest:
+                    raise ValueError("Registered external crater manifest changed; create a new dataset version")
+                reject_training_overlap(selected, paths.WORKSPACE_ROOT,
+                    deployment.get("training_identity", {}).get("feature_identity", {}).get("inputs_sha256"))
+                if any(row.get("mask_semantics") not in CRATER_SEMANTICS or
+                       row.get("classes") not in [CLASSES, ["Background", "Crater"]] for row in selected):
+                    raise ValueError("External heads need declared binary crater masks, not IMP/terrain labels")
             from pathlib import Path
             # Deployment index is in outputs, not a dataset manifest. It contains inputs only.
             import json
             index_path = deployment_path.parent / "encoder_inputs.jsonl"
             admitted = {r["sample_id"]: r for r in map(json.loads, index_path.read_text(encoding="utf-8").splitlines()) if r}
             for row in selected:
+                if input_protocol == TRANSFER_PROTOCOL:
+                    transfer_input(row, paths.WORKSPACE_ROOT, deployment["encoder"])
+                    continue
                 known = admitted.get(row["sample_id"])
                 if not known or known["split"] != payload.split or known["scene_group_id"] != row["scene_group_id"]:
                     raise ValueError("Head dataset must preserve admitted held-out IDs/groups/splits")
