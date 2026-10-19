@@ -171,7 +171,7 @@ Worker восстанавливает predictions.jsonl из базы при п�
 
 `GET /datasets/builtin` всегда возвращает Марс и Луну с подвыборками
 `segmentation`, `height` и lunar `imp`. Чтение каталога не запускает загрузки.
-Локальные данные находятся в `data_orbital/orbital_300_v3/<planet>/`.
+Локальные данные находятся в `data_orbital/orbital_300_v4/<planet>/`.
 
 `POST /datasets/builtin/{planet}/ensure` с `{"subset":"segmentation"}`:
 

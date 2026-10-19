@@ -12,7 +12,7 @@ try:
     from fastapi.testclient import TestClient
     from api.main import create_app
     from benchmark_services.common.settings import Settings
-    from planetary_vlm.datasets.orbital import download_dataset, inspect_subset
+    from planetary_vlm.datasets.orbital import COLLECTION, download_dataset, inspect_subset
 except ImportError:
     TestClient = None
 
@@ -30,7 +30,7 @@ class BuiltinTests(unittest.TestCase):
         for planet in self.spec["tracks"]:
             for track in self.spec["tracks"][planet]:
                 for index, split in enumerate(("test", "val"), 1):
-                    prefix = f"data_orbital/orbital_300_v3/{planet}/{track}/{index:03d}"
+                    prefix = f"data_orbital/{COLLECTION}/{planet}/{track}/{index:03d}"
                     target = "mask" if track == "segmentation" else "height_map"
                     row = {"sample_id": f"{planet}_{track}_{index}", "planet": planet,
                         "source_split": split, "source_dataset": "fixture/source", "source_revision": "pinned",
@@ -43,7 +43,7 @@ class BuiltinTests(unittest.TestCase):
                         path = self.root / row[key]
                         path.parent.mkdir(parents=True, exist_ok=True)
                         path.write_bytes(self.pixels)
-                manifest = self.root / f"data_orbital/orbital_300_v3/{planet}/{track}_manifest.jsonl"
+                manifest = self.root / f"data_orbital/{COLLECTION}/{planet}/{track}_manifest.jsonl"
                 manifest.write_text("".join(json.dumps(r) + "\n" for r in self.spec["tracks"][planet][track]), encoding="utf-8")
         recipe = self.root / "recipe.json"
         recipe.write_text(json.dumps(self.spec), encoding="utf-8")
@@ -119,7 +119,7 @@ class BuiltinTests(unittest.TestCase):
         self.assertEqual(self.client.get("/datasets").json(), [])
 
     def test_absent_manifest_imp_restore_does_not_fetch_other_lunar_tasks(self):
-        manifest = self.root / "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+        manifest = self.root / f"data_orbital/{COLLECTION}/moon/segmentation_manifest.jsonl"
         manifest.unlink()
         imp, other = self.spec["tracks"]["moon"]["segmentation"]
         (self.root / imp["image"]).unlink()
@@ -135,7 +135,7 @@ class BuiltinTests(unittest.TestCase):
     def test_unknown_subset_and_protected_asset_are_rejected(self):
         self.assertEqual(self.ensure("mars", "imp").status_code, 422)
         self.assertEqual(self.ensure("earth").status_code, 422)
-        manifest = self.root / "data_orbital/orbital_300_v3/mars/segmentation_manifest.jsonl"
+        manifest = self.root / f"data_orbital/{COLLECTION}/mars/segmentation_manifest.jsonl"
         row = {**self.spec["tracks"]["mars"]["segmentation"][0], "image": "data_rover/forbidden.png"}
         manifest.write_text(json.dumps(row) + "\n")
         with patch("planetary_vlm.datasets.orbital.materialize", side_effect=AssertionError("Must reject before acquisition")):

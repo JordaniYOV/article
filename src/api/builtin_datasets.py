@@ -77,7 +77,7 @@ def register(session, planet, subset):
         temporary = manifest.with_suffix(".tmp")
         temporary.write_text(content, encoding="utf-8")
         os.replace(temporary, manifest)
-    payload = DatasetConfigCreate(name=config_name(planet, subset), version=f"v3-{checksum[:16]}",
+    payload = DatasetConfigCreate(name=config_name(planet, subset), version=f"{COLLECTION.rsplit('_', 1)[-1]}-{checksum[:16]}",
         planet=planet, task_id="imp_segmentation" if subset == "imp" else "elevation_map_reading" if subset == "height" else "orbital_features",
         manifest_path=str(manifest), splits=sorted(info["split_counts"]),
         preprocessing={"input_protocol": "curated_imp_png_reflectance_0_0.12_v1" if subset == "imp" else "orbital_image_only_v1",

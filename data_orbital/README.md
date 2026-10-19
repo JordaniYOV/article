@@ -1,5 +1,33 @@
 # Orbital 300 v4
 
+## Очистка 19 октября 2026
+
+Сохранены `head_training_v2/` (120 WAC сцен: 50 train / 39 val / 31 test),
+`crater_seg_100_v1/` (50 Moon + 50 Mars), `orbital_300_v4/` (300 сцен с масками
+и отдельными картами высот), ручная разметка `crater_annotations_v5/` и исходные
+аннотации/доказательства замены изображения. Изображения, маски, DEM, manifests
+и identities этих коллекций не изменены.
+
+Удалены снимки старой v3, версии разметки v1–v4, черновая crater-выборка,
+копии CVAT-изображений и старый generated QA-набор. Небольшие исходные v3
+манифесты и единственный отличающийся снимок сохранены в
+`provenance/orbital_300_v3/`: они нужны для hash-bound проверки пересечений и
+происхождения исправленного снимка. API-каталог использует v4.
+Исторические контексты v1/v2, панели buried-crater audit и дополнительные ручные
+маски сгруппированы в `provenance/`, без удаления их содержимого.
+
+CVAT ZIP распакованы в `crater_annotations_v5/exports/<planet_split>/annotations.xml`.
+Проверка сравнивает XML с исходным запечатанным SHA-256; прежние hashes ZIP
+остаются историческими записями, но отсутствующие ZIP-байты не объявляются
+проверенными. 26 исходных Mars CSV сохранены по hashes из v5 samples в
+`crater_source_annotations_v1/mars_crater_metadata/`. Полный publisher ZIP больше
+не хранится: историческая пересборка через `SourceAnnotations` потребует его
+явного восстановления, а не автоматического скачивания. Это не влияет на
+обучение голов, проверку сохранённой v5 или текущие crater-коллекции.
+
+Удалённое отправлено в Корзину Windows. Журнал — `outputs/cleanup_20261019/`.
+Среды, веса, checkpoints, результаты и защищённый архив не очищались.
+
 ## Additional crater-only collection
 
 `crater_seg_100_v1/` is a separate 50 Moon + 50 Mars publisher-test collection
@@ -28,7 +56,8 @@ The active collection is [`orbital_300_v4/`](orbital_300_v4/). It has **300 dist
 Only `mars_seg_018/image.png` changed from v3: a real THEMIS v11 crop was
 resampled and image-feature-registered to the original 512×512 annotation grid.
 All 799 other data assets, including every mask/height array, are byte-identical.
-The old v3 collection and sealed candidate builds remain intact.
+The v3 image copy and older candidate builds were retired during cleanup;
+their required provenance and the current v5 annotations are retained.
 
 | Planet | Segmentation eval | Elevation eval | Train | Segmentation test/val |
 |---|---:|---:|---:|---:|
@@ -63,8 +92,8 @@ The earlier retain-band decision in `source_artifacts_v1.json` is historical,
 superseded by the explicit image-only replacement request. The different mosaic
 versions are not a controlled single-corruption pair. Replacement provenance is
 in `orbital_300_v4/image_replacement.json`; its separate image-license review is
-pending. `outputs/colab/spacellava_q1_q4_v5_clean.zip` contains 100 RGB images and
-400 closed-form requests, no masks/heights/answers, for unscored inference.
+pending. The old Colab ZIP distribution was removed; current source images and
+candidate references remain available locally.
 
 All 100 segmentation images retain a publisher **val/test** split. The 100 height images also retain their source val/test strata. Train images are excluded from evaluation. The Mars height images are at least three MMLSv2 grid tiles (Manhattan distance) from the selected train tiles; this is a local adjacency check, not a proof of geographic independence across the parent mosaic. Lunar WAC train and evaluation images have disjoint product IDs. The source region overlap for Mars ConeQuest val/test and any model pretraining overlap remain open audit limitations.
 

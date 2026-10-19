@@ -1,7 +1,7 @@
 # Secondary complete-system inference, not the primary encoder-probe experiment.
 [dataset]
 workspace_root = ".."
-manifest = "data_orbital/orbital_300_v3/moon/segmentation_manifest.jsonl"
+manifest = "data_orbital/orbital_300_v4/moon/segmentation_manifest.jsonl"
 prepared_dir = "data_orbital/inference/full_systems_v1"
 source_dataset = "nasa-ibm-ai4science/Sombench-IMP-Segmentation"
 splits = ["val", "test"]

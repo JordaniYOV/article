@@ -82,6 +82,7 @@ def verify_replacement(root, row):
     """Validate the exact image/mask anchor and replay its resampling recipe."""
     import numpy as np
     from PIL import Image
+    from planetary_vlm.datasets.retired_assets import retained_orbital_path
     root = Path(root).resolve()
     path = local(root,row["image_replacement_record"])
     proof = json.loads(path.read_text(encoding="utf-8"))
@@ -90,7 +91,11 @@ def verify_replacement(root, row):
         raise ValueError("Image replacement provenance changed")
     for field in ("original_image", "native_source_crop", "padded_source_crop", "replacement_image"):
         item = proof[field]
-        if file_hash(local(root,item["path"])) != item["sha256"]:
+        try:
+            retained = retained_orbital_path(root,item["path"],item["sha256"])
+        except (FileNotFoundError, ValueError) as error:
+            raise ValueError("Replacement input/output changed: " + field) from error
+        if file_hash(retained) != item["sha256"]:
             raise ValueError("Replacement input/output changed: " + field)
     if (proof["replacement_image"]["path"] != row["image"]
             or proof["replacement_image"]["sha256"] != row["image_sha256"]

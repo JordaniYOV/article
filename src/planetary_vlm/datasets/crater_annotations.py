@@ -483,9 +483,20 @@ def verify_crater_build(root, folder):
         return path
     for name, checksum in metadata["files_sha256"].items():
         if file_hash(local(name)) != checksum: raise ValueError("Annotation build file changed: " + name)
+    export_storage = {}
     for name, record in metadata["exports"].items():
-        if file_hash(local("exports/"+name)) != record["archive_sha256"]:
-            raise ValueError("Snapshotted CVAT export changed")
+        archive = local("exports/"+name)
+        if archive.exists():
+            if file_hash(archive) != record["archive_sha256"]:
+                raise ValueError("Snapshotted CVAT export changed")
+            export_storage[name] = "original_zip_verified"
+        else:
+            # Cleanup may unpack the XML without changing any sealed metadata.
+            # This verifies the original XML hash, NOT the absent ZIP bytes.
+            xml = local("exports/" + Path(name).stem + "/annotations.xml")
+            if file_hash(xml) != record.get("xml_sha256"):
+                raise ValueError("Snapshotted CVAT XML changed")
+            export_storage[name] = "original_xml_verified_zip_bytes_not_available"
     for name, checksum in metadata["converter_sha256"].items():
         if file_hash(local("converter_snapshot/"+name)) != checksum:
             raise ValueError("Snapshotted converter changed")
@@ -533,6 +544,7 @@ def verify_crater_build(root, folder):
     if len(targets) != metadata["reference_ready_questions"]:
         raise ValueError("Inconsistent admitted-target count")
     return {"schema": SCHEMA, "integrity_verified": True, "bundle_sha256": claimed, "images": len(samples),
+            "export_storage": export_storage,
             "candidate_questions": len(questions), "reference_ready_questions": len(targets),
             "ready_for_scored_inference": bool(targets), "scientific_result": False}
 

@@ -20,8 +20,8 @@ from planetary_vlm.network import urlopen
 from .base import PROJECT_ROOT
 from .sources import download
 
-COLLECTION = "orbital_300_v3"
-RECOVERY = PROJECT_ROOT / "configs/datasets/orbital_builtin_recovery.json"
+COLLECTION = "orbital_300_v4"
+RECOVERY = PROJECT_ROOT / "configs/datasets/orbital_builtin_recovery_v4.json"
 LABELS = {"segmentation": "Снимки с масками", "height": "Снимки с картами высот", "imp": "IMP · готовая голова IBM"}
 ASSETS = ("image", "mask", "height_map", "height_valid_mask")
 

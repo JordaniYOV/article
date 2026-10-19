@@ -149,21 +149,23 @@ class Exclusions:
 def load_exclusions(root):
     """Read only explicitly named orbital manifests/assets; no broad directory walks."""
     from PIL import Image
+    from .retired_assets import retained_orbital_path
     root = Path(root).resolve()
     result = Exclusions()
     for collection in ("orbital_300_v3", "orbital_300_v4"):
         for planet in ("moon", "mars"):
             for track in ("segmentation", "height", "train"):
                 relative = f"data_orbital/{collection}/{planet}/{track}_manifest.jsonl"
-                manifest = orbital_path(root, relative)
-                if not manifest.exists():
+                try:
+                    manifest = retained_orbital_path(root, relative)
+                except FileNotFoundError:
                     if collection == "orbital_300_v3":
                         raise ValueError("All six orbital_300_v3 exclusion manifests are required")
                     continue
                 source_rows = rows(manifest)
                 result.provenance.append({"path": relative, "sha256": sha(manifest), "samples": len(source_rows)})
                 for row in source_rows:
-                    path = orbital_path(root, row["image"])
+                    path = retained_orbital_path(root, row["image"], row["image_sha256"])
                     digest = sha(path)
                     if digest != row["image_sha256"]:
                         raise ValueError("Excluded source image changed: " + row["sample_id"])

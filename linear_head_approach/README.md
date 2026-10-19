@@ -7,8 +7,9 @@ backbone и фактический visual tower SpaceLLaVA заморожены;
 
 Текущий target: **Windows10 / RTX3060Ti 8GiB / RAM16GiB**, обучение через CLI,
 benchmark через UI/FastAPI и отдельный inference-only heads-worker на8003.
-Начни с [`gpu_runbook.md`](gpu_runbook.md). Colab notebook/ZIP оставлены как
-зафиксированный прежний вариант, их код не распаковывать поверх этой версии.
+Начни с [`gpu_runbook.md`](gpu_runbook.md). Готовые Colab notebooks/ZIP удалены
+19 октября 2026; основной путь — CLI. Генераторы остаются исходным кодом,
+так как входят в fingerprints ранее обученных голов; не удалять их без миграции.
 **Новый Windows GPU smoke ещё не выполнен.**
 
 ## Файлы
@@ -35,7 +36,8 @@ benchmark через UI/FastAPI и отдельный inference-only heads-worke
 `.venv-heads3060`, assets: `weights/encoder_heads`, runs: `outputs/heads_rtx3060ti_v1`.
 Windows requirements: `requirements/encoder-heads-windows.txt`. Признаки,
 логи и обученные головы — вне кода, в `outputs/` или Drive. Прежняя версия
-целиком сохранена в `outputs/archives/linear_head_approach_before_neural_v2_20261018/`.
+сохранена как исходный код в `outputs/archives/linear_head_approach_before_neural_v2_20261018/`;
+дублирующая старая копия данных удалена.
 Ни один файл защищённого архива не использовался.
 
 ## Важные границы

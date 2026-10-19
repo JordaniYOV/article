@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data_orbital" / "orbital_300_v3"
+DATA = ROOT / "data_orbital" / "orbital_300_v4"
 
 
 def check_asset(row: dict, key: str, sha_key: str) -> Path:
@@ -26,7 +26,7 @@ def check_asset(row: dict, key: str, sha_key: str) -> Path:
 def main(argv=None) -> None:
     global DATA
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--collection', default='data_orbital/orbital_300_v3')
+    parser.add_argument('--collection', default='data_orbital/orbital_300_v4')
     args = parser.parse_args(argv)
     selected = Path(args.collection)
     if any(p.casefold() == 'data_rover' for p in selected.parts):

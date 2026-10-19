@@ -147,6 +147,23 @@ class CraterAnnotationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Snapshotted CVAT export changed'):
                 module.verify_crater_build(root,folder)
 
+    def test_unpacked_cvat_xml_keeps_the_sealed_content_hash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); exports=self.fixture(root); self.build(root,exports)
+            folder=root/'data_orbital/annotation_v1'
+            import zipfile
+            for archive in (folder/'exports').glob('*.zip'):
+                with zipfile.ZipFile(archive) as bundle:
+                    raw=bundle.read('annotations.xml')
+                xml=archive.with_suffix('')/'annotations.xml'
+                xml.parent.mkdir(); xml.write_bytes(raw); archive.unlink()
+            result=module.verify_crater_build(root,folder)
+            self.assertEqual(set(result['export_storage'].values()),
+                             {'original_xml_verified_zip_bytes_not_available'})
+            xml.write_bytes(b'changed XML')
+            with self.assertRaisesRegex(ValueError,'Snapshotted CVAT XML changed'):
+                module.verify_crater_build(root,folder)
+
     def test_unresolved_catalog_instances_need_geometry_or_reasoned_exclusion(self):
         review={'review_status':'accepted','annotator':'fixture','reviewer':'other fixture','reviewed_at':'2026-10-15T00:00:00Z',
                 'review_basis':'fixture','annotation_fingerprint':'same','complete_for_size_rule':True,'source_instances_complete':True,
