@@ -86,6 +86,13 @@ def main(argv: list[str] | None = None) -> int:
     compare.add_argument("--repetitions", type=int, default=1000)
     dataset = commands.add_parser("dataset", help="Download, prepare and audit datasets independently of inference")
     datasets = dataset.add_subparsers(dest="dataset_command", required=True)
+    mars_binary = datasets.add_parser("mars-binary-build", help="Build pinned orbital Mars-Bench binary crater splits; no models")
+    mars_binary.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    mars_binary.add_argument("--output", default="data_orbital/mars_crater_binary_v1")
+    mars_binary.add_argument("--allow-download", action="store_true", help="Explicit source acquisition, resumable and SHA-256 verified")
+    mars_binary_verify = datasets.add_parser("mars-binary-verify", help="Offline verification of all Mars binary PNG pairs and source identities")
+    mars_binary_verify.add_argument("--workspace", default=str(Path(__file__).resolve().parents[2]))
+    mars_binary_verify.add_argument("--dataset", default="data_orbital/mars_crater_binary_v1")
     download = datasets.add_parser("download", help="Explicit source acquisition; never triggered by prepare")
     download.add_argument("--planet", choices=("mars", "moon", "all"), default="all")
     download.add_argument("--root", default="data_rover")
@@ -172,7 +179,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "dataset":
             from planetary_vlm.datasets import MarsData, LuneData
             operation = args.dataset_command
-            if operation == "download":
+            if operation in {"mars-binary-build", "mars-binary-verify"}:
+                from planetary_vlm.datasets.mars_binary import build_collection, verify_collection
+                result = (build_collection(args.workspace, args.output, allow_download=args.allow_download)
+                          if operation == "mars-binary-build" else verify_collection(args.workspace, args.dataset))
+            elif operation == "download":
                 from planetary_vlm.download_dataset import download_dataset
                 result = download_dataset(planet=args.planet, root=args.root,
                     mars_archive=args.mars_archive, lunar_pilot_ids=args.lunar_pilot_ids,

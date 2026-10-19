@@ -1,0 +1,11 @@
+method = "lora_decoder"
+seeds = [13, 37, 73]
+
+[decoder]
+width = 64
+
+[lora]
+rank = 4
+alpha = 8.0
+dropout = 0.0
+checkpoint_blocks = true

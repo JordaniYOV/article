@@ -1,0 +1,16 @@
+# New CLI experiments only; do not upgrade the environment of old published heads.
+# Python 3.12. Install a matching torch/torchvision CUDA pair for the actual host first.
+# Ranges are a candidate environment, not a tested lock. Exact installed versions enter run identity.
+torch>=2.5,<3
+torchvision>=0.20,<1
+numpy>=1.26,<3
+Pillow>=10,<13
+omegaconf>=2.3,<3
+einops>=0.8,<1
+h5py>=3.12,<4
+hdf5plugin>=5,<7
+pandas>=2.2,<4
+scipy>=1.14,<2
+certifi>=2024.2.2
+# SAM code only, official verified commit; does not download model checkpoints.
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git@6fdee8f2727f4506cfbbe553e23b895e27956588

@@ -54,7 +54,7 @@ class RequirementsTests(unittest.TestCase):
 
     def test_every_requirement_file_has_valid_pip_entries(self):
         paths = list((ROOT / "requirements").iterdir())
-        services = {"api.txt", "spacellava.txt", "ibm-imp.txt", "encoder-heads-windows.txt"}
+        services = {"api.txt", "spacellava.txt", "ibm-imp.txt", "encoder-heads-windows.txt", "adaptation.txt"}
         colab = {"ibm-crater-colab.txt", "ibm-val14-colab-lock.txt", "encoder-heads-colab.txt"}
         self.assertEqual({p.name for p in paths}, services | colab)
         self.assertFalse((ROOT / "requirements.txt").exists())

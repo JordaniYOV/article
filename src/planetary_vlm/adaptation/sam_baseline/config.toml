@@ -1,0 +1,14 @@
+method = "sam_baseline"
+
+[sam]
+# Explicit trusted full SHA-256 is required before loading a local .pth file.
+checkpoint = "weights/sam/sam_vit_b_01ec64.pth"
+sha256 = ""
+points_per_side = 32
+points_per_batch = 16
+pred_iou_thresh = 0.88
+stability_score_thresh = 0.95
+min_area = 16
+max_area_fraction = 0.35
+min_axis_ratio = 0.3
+min_circularity = 0.35

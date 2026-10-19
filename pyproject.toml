@@ -13,6 +13,7 @@ dependencies = []
 api = ["fastapi>=0.115,<1", "sqlmodel>=0.0.24,<0.1", "pydantic-settings>=2.7,<3", "uvicorn>=0.34,<1", "python-multipart>=0.0.20,<1", "Pillow>=10,<13", "numpy>=1.26,<3", "opencv-python-headless>=4.12,<4.14", "certifi>=2024.2.2", "structlog>=25.1,<27"]
 api-test = ["httpx>=0.28,<1"]
 images = ["Pillow>=10", "numpy>=1.26"]
+datasets = ["Pillow>=10,<13", "numpy>=1.26,<3", "pyarrow>=18,<25", "certifi>=2024.2.2"]
 distortion = ["numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"]
 hf = ["torch>=2.5", "transformers>=4.49,<5", "accelerate>=1"]
 quantization = ["bitsandbytes>=0.45"]
@@ -20,6 +21,7 @@ stereo = ["Pillow>=10", "numpy>=1.26,<2.3", "opencv-python-headless>=4.12,<4.13"
 
 [project.scripts]
 planetary-vlm = "planetary_vlm.cli:main"
+planetary-adapt = "planetary_vlm.adaptation.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -29,3 +31,4 @@ namespaces = false
 [tool.setuptools.package-data]
 "api" = ["README.md"]
 "planetary_vlm.datasets._mars" = ["*.ps1", "*.toml"]
+"planetary_vlm.adaptation" = ["README.md", "*/config.toml", "*/README.md"]

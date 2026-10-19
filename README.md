@@ -1,5 +1,17 @@
 # Evaluating Vision Models on Planetary Surfaces
 
+## Активный этап — Mars binary adaptation (19 октября 2026)
+
+Новый основной эксперимент: способы адаптации NASA–IBM Lunar-FM к бинарной
+сегментации кратеров на Mars THEMIS. Отдельные папки и CLI-пайплайны A linear probe,
+B frozen encoder + decoder, C LoRA + тот же decoder и D frozen SAM baseline:
+[`src/planetary_vlm/adaptation/README.md`](src/planetary_vlm/adaptation/README.md).
+Данные: `mars_crater_binary_v1`, 3600 train / 900 val / 900 test. Новые методы
+ещё не проходили реальный pretrained GPU smoke; обучение не запускалось.
+Старые `linear_head_approach` и UI deployments сохранены, не переподключены к Марсу.
+Новый CLI: `python -m planetary_vlm.adaptation linear_probe plan` (без моделей).
+Остальные разделы ниже описывают сохранённые предыдущие направления проекта.
+
 Рабочий проект для сравнения vision-language models (VLM) и визуальных энкодеров
 на орбитальных снимках поверхности Луны и Марса, включая оценку устойчивости к
 искажениям. Научный замысел — [`research_plan.md`](research_plan.md).

@@ -1,0 +1,5 @@
+method = "linear_probe"
+seeds = [13, 37, 73]
+
+[training]
+head_lr = 0.001
