@@ -1,0 +1,101 @@
+schema = "mars-robustness-v1"
+seed = 20261021
+
+# Independent effects, not cumulative chains. The same random layout is used
+# across levels; only the declared intensity/shift/event count changes.
+[[conditions]]
+id = "clean"
+chain = []
+
+[[conditions]]
+id = "shear_1"
+chain = ["shear"]
+[conditions.parameters.shear]
+max_shift_px = 1.0
+control_spacing_px = 32
+scan_axis = "both"
+
+[[conditions]]
+id = "shear_2"
+chain = ["shear"]
+[conditions.parameters.shear]
+max_shift_px = 3.0
+control_spacing_px = 32
+scan_axis = "both"
+
+[[conditions]]
+id = "shear_3"
+chain = ["shear"]
+[conditions.parameters.shear]
+max_shift_px = 6.0
+control_spacing_px = 32
+scan_axis = "both"
+
+[[conditions]]
+id = "radiation_1"
+chain = ["radiation"]
+[conditions.parameters.radiation]
+num_hits = 20
+max_streak_length = 5
+strength = 1.0
+
+[[conditions]]
+id = "radiation_2"
+chain = ["radiation"]
+[conditions.parameters.radiation]
+num_hits = 80
+max_streak_length = 5
+strength = 1.0
+
+[[conditions]]
+id = "radiation_3"
+chain = ["radiation"]
+[conditions.parameters.radiation]
+num_hits = 200
+max_streak_length = 5
+strength = 1.0
+
+[[conditions]]
+id = "lens_flare_1"
+chain = ["lens_flare"]
+[conditions.parameters.lens_flare]
+strength = 0.15
+radius = 0.3
+num_ghosts = 3
+
+[[conditions]]
+id = "lens_flare_2"
+chain = ["lens_flare"]
+[conditions.parameters.lens_flare]
+strength = 0.35
+radius = 0.3
+num_ghosts = 3
+
+[[conditions]]
+id = "lens_flare_3"
+chain = ["lens_flare"]
+[conditions.parameters.lens_flare]
+strength = 0.6
+radius = 0.3
+num_ghosts = 3
+
+[[conditions]]
+id = "hard_shadows_1"
+chain = ["hard_shadows"]
+[conditions.parameters.hard_shadows]
+strength = 0.25
+num_shadows = 1
+
+[[conditions]]
+id = "hard_shadows_2"
+chain = ["hard_shadows"]
+[conditions.parameters.hard_shadows]
+strength = 0.5
+num_shadows = 1
+
+[[conditions]]
+id = "hard_shadows_3"
+chain = ["hard_shadows"]
+[conditions.parameters.hard_shadows]
+strength = 0.75
+num_shadows = 1

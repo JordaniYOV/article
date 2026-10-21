@@ -32,3 +32,4 @@ namespaces = false
 "api" = ["README.md"]
 "planetary_vlm.datasets._mars" = ["*.ps1", "*.toml"]
 "planetary_vlm.adaptation" = ["README.md", "*/config.toml", "*/README.md"]
+"planetary_vlm.robustness" = ["README.md", "protocol.toml"]

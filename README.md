@@ -10,6 +10,9 @@ B frozen encoder + decoder, C LoRA + тот же decoder и D frozen SAM baselin
 ещё не проходили реальный pretrained GPU smoke; обучение не запускалось.
 Старые `linear_head_approach` и UI deployments сохранены, не переподключены к Марсу.
 Новый CLI: `python -m planetary_vlm.adaptation linear_probe plan` (без моделей).
+Для уже обученных Mars-подходов добавлен отдельный [robustness CLI](src/planetary_vlm/robustness/README.md):
+`python -m planetary_vlm.robustness run`. Он один раз готовит общие искажённые
+PNG, затем последовательно оценивает A/B/C со всеми тремя seeds и SAM, без обучения.
 Остальные разделы ниже описывают сохранённые предыдущие направления проекта.
 
 Рабочий проект для сравнения vision-language models (VLM) и визуальных энкодеров
