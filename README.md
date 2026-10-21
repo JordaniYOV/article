@@ -13,6 +13,11 @@ B frozen encoder + decoder, C LoRA + тот же decoder и D frozen SAM baselin
 Для уже обученных Mars-подходов добавлен отдельный [robustness CLI](src/planetary_vlm/robustness/README.md):
 `python -m planetary_vlm.robustness run`. Он один раз готовит общие искажённые
 PNG, затем последовательно оценивает A/B/C со всеми тремя seeds и SAM, без обучения.
+Если evaluation отклоняет training identity, команда
+`python -m planetary_vlm.identity_diagnostics` покажет добавленные/удалённые пакеты,
+изменённые версии и другие расхождения без загрузки модели и изменения файлов.
+Используй именно Python исходного training-окружения; `--full` дополнительно
+проверяет hardware/assets/cache, не выполняя inference.
 Остальные разделы ниже описывают сохранённые предыдущие направления проекта.
 
 Рабочий проект для сравнения vision-language models (VLM) и визуальных энкодеров
